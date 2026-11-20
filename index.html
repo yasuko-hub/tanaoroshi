@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="棚卸">
+<meta name="theme-color" content="#111214">
+<title>棚卸ツール</title>
+<style>
+:root{--bg:#e9eaec;--card:#fff;--ink:#111214;--mute:#5d6168;--line:#d4d6da;--acc:#ff4f00;--ok:#0f6b45;--okbg:#e6f4ec;--ng:#8a4b00;--ngbg:#fff2e0;--red:#c62828}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;overflow-x:clip;-webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:10;background:var(--ink);color:#fff;padding:calc(8px + env(safe-area-inset-top)) max(4vw,12px) 0}
+.hrow{display:flex;align-items:center;gap:10px}
+header h1{margin:0;font-size:17px;flex:1}
+#pending{display:none;background:var(--acc);color:#fff;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:700}
+nav{display:flex;gap:4px;margin-top:6px}
+nav button{all:unset;cursor:pointer;padding:8px 14px;font-size:15px;color:#aeb2b8;border-bottom:3px solid transparent}
+nav button.on{color:#fff;border-bottom-color:var(--acc);font-weight:700}
+main{max-width:600px;margin:0 auto;padding:14px max(4vw,12px) calc(40px + env(safe-area-inset-bottom))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.step{font-size:12px;color:var(--mute);font-weight:600}
+h2{font-size:20px;margin:2px 0 12px;line-height:1.25}
+h3{font-size:17px;margin:0}
+label{display:block;font-size:13px;color:var(--mute);margin:12px 0 4px}
+input,select{width:100%;font:inherit;font-size:18px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);min-height:50px}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+button{font:inherit;font-size:17px;font-weight:700;min-height:50px;padding:10px 16px;border:0;border-radius:8px;background:var(--ink);color:#fff;cursor:pointer;width:100%;margin-top:12px}
+button.sub{background:#fff;color:var(--ink);border:1px solid var(--line);font-weight:500}
+button.go{background:var(--acc);font-size:20px;min-height:58px}
+button:disabled{opacity:.45}
+.row{display:flex;gap:8px}.row>input{flex:1}.row>button{flex:none;width:auto;margin:0}
+.list button{text-align:left;background:#fff;color:var(--ink);border:1px solid var(--line);font-weight:500;margin-top:8px}
+.list small{display:block;color:var(--mute);font-weight:400;font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.grid button{margin:0;min-height:72px;font-size:19px;background:#fff;color:var(--ink);border:2px solid var(--line)}
+.grid button.on{border-color:var(--acc)}
+.ctx{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px;margin-bottom:12px;color:var(--mute)}
+.ctx b{color:var(--ink)}
+.ctx button{all:unset;cursor:pointer;color:#1d5fd6;text-decoration:underline;margin-left:4px;font-size:13px}
+#camBtn{font-size:16px;padding:0 14px}
+#pname{margin-top:10px;padding:14px;border-radius:8px;background:var(--bg);min-height:58px;font-size:17px;font-weight:600;white-space:pre-line}
+#pname.ok{background:var(--okbg);color:var(--ok)}#pname.ng{background:var(--ngbg);color:var(--ng)}
+#exist{font-size:14px;color:var(--ng);margin-top:6px;font-weight:600}
+.qty{display:grid;grid-template-columns:64px minmax(0,1fr) 64px;gap:8px}
+.qty button{margin:0;font-size:26px}.qty input{text-align:center;font-size:28px;font-weight:700}
+.two{display:grid;grid-template-columns:1fr 2fr;gap:8px}.two button{margin-top:12px}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.item .meta{color:var(--mute);font-size:13px}
+.item .q{font-weight:700;font-size:20px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.item button{width:auto;margin:0;min-height:40px;font-size:13px;padding:6px 12px;background:#fff;color:var(--mute);border:1px solid var(--line)}
+.item button.armed{background:var(--red);color:#fff;border-color:var(--red)}
+.tag{display:inline-block;font-size:11px;background:var(--acc);color:#fff;border-radius:4px;padding:0 6px;margin-left:6px;vertical-align:middle}
+.muted{color:var(--mute);font-size:13px;margin:6px 0 0}
+#note{display:none;background:var(--ngbg);color:var(--ng);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:14px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:999px;font-size:15px;display:none;z-index:50;max-width:92%;text-align:center}
+#toast.err{background:var(--red)}
+.hidden{display:none!important}
+/* CSV・集計 */
+.sumhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.sumhead span{color:var(--mute);font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+th,td{padding:7px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--mute);font-weight:600}
+td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+td.c{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--mute);font-size:13px}
+details summary{cursor:pointer;color:#1d5fd6;font-size:14px;margin-top:8px}
+/* カメラ */
+#camwrap{position:fixed;inset:0;background:#000;z-index:40;display:flex;flex-direction:column}
+#camview{position:relative;flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#cam{width:100%}
+#cam video{width:100%!important;height:auto!important;display:block}
+#guide{position:absolute;left:7.5%;right:7.5%;top:50%;height:34vw;max-height:170px;transform:translateY(-50%);border:3px solid #fff;border-radius:10px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45);pointer-events:none}
+#guide::after{content:"";position:absolute;left:4%;right:4%;top:50%;height:3px;margin-top:-1.5px;background:#ff2a2a;box-shadow:0 0 8px #ff2a2a;animation:blink 1.2s ease-in-out infinite}
+@keyframes blink{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){#guide::after{animation:none}}
+#camtip{position:absolute;left:0;right:0;top:calc(50% + min(17vw,85px) + 14px);text-align:center;color:#fff;font-size:15px;text-shadow:0 1px 3px #000;padding:0 16px}
+.cambar{display:flex;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:#000}
+.cambar button{margin:0;background:#2a2c30}
+#torchBtn{width:auto;flex:none}
+/* ダイアログ */
+#dlg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:45;display:flex;align-items:center;justify-content:center;padding:16px}
+#dlg .card{max-width:420px;width:100%;margin:0}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow"><h1>棚卸ツール</h1><span id="pending"></span></div>
+  <nav><button id="tabCount" class="on">棚卸</button><button id="tabCsv">CSV出力</button></nav>
+</header>
+
+<main>
+  <div id="note"></div>
+
+  <!-- ========== 棚卸 ========== -->
+  <div id="vCount">
+    <section id="s-user" class="card hidden">
+      <div class="step">STEP 1</div>
+      <h2>作業者の名前</h2>
+      <input id="user" placeholder="例：山田" autocomplete="name">
+      <button id="userNext">次へ</button>
+    </section>
+
+    <section id="s-group" class="card hidden">
+      <div class="step">STEP 2</div>
+      <h2>作業グループ（棚卸日）</h2>
+      <div id="groups" class="list"><p class="muted">読み込み中…</p></div>
+      <label for="newgroup">＋ 新規棚卸</label>
+      <div class="row"><input id="newgroup"><button id="mkGroup">作成</button></div>
+    </section>
+
+    <section id="s-loc" class="card hidden">
+      <div class="step">STEP 3</div>
+      <h2>ロケーション</h2>
+      <div id="locs" class="grid"></div>
+    </section>
+
+    <section id="s-scan" class="hidden">
+      <div class="card">
+        <div class="ctx" id="ctx"></div>
+        <div class="row">
+          <input id="code" inputmode="numeric" enterkeyhint="done" placeholder="JANを入力してEnter" autocomplete="off">
+          <button id="camBtn" class="sub">📷 カメラ</button>
+        </div>
+        <div id="pname">コードを入力するか、📷で読み取ってください</div>
+        <div id="exist" class="hidden"></div>
+        <label for="qty">数量</label>
+        <div class="qty">
+          <button class="sub" id="minus" aria-label="1減らす">−</button>
+          <input id="qty" type="number" inputmode="numeric" enterkeyhint="done" min="0" value="1">
+          <button class="sub" id="plus" aria-label="1増やす">＋</button>
+        </div>
+        <div class="two"><button id="cancelBtn" class="sub">やめる</button><button id="regBtn" class="go">登録</button></div>
+      </div>
+
+      <div class="card">
+        <div class="sumhead"><h3>自分の登録履歴</h3><span id="histSum"></span></div>
+        <div id="hist"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ========== CSV出力 ========== -->
+  <div id="vCsv" class="hidden">
+    <section class="card">
+      <h2>CSV出力・集計</h2>
+      <label for="csvGroup">作業グループ</label>
+      <select id="csvGroup"></select>
+      <button id="csvLoad" class="sub">集計を表示・更新</button>
+    </section>
+    <div id="csvBody"></div>
+  </div>
+</main>
+
+<!-- カメラ -->
+<div id="camwrap" class="hidden">
+  <div id="camview">
+    <div id="cam"></div>
+    <div id="guide"></div>
+    <div id="camtip">枠に入れて、赤い線にバーコードを合わせる</div>
+  </div>
+  <div class="cambar"><button id="torchBtn" class="hidden">💡 ライト</button><button id="camClose">閉じる</button></div>
+</div>
+
+<!-- 重複ダイアログ -->
+<div id="dlg" class="hidden">
+  <div class="card">
+    <h2>すでに登録されています</h2>
+    <p id="dlgText" style="margin:0 0 4px"></p>
+    <button id="dlgAdd" class="go">追加で登録（合計に足す）</button>
+    <button id="dlgOver">数え直し（上書き）</button>
+    <button id="dlgCancel" class="sub">やめる</button>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+{
+/* ★ ここに Apps Script の「ウェブアプリURL」を貼り付けます ★ */
+const API_URL = 'https://script.google.com/macros/s/AKfycbwYZWQYSbpzUKbCCjctNeXubEbiyDM6_GBrC2BR7RpMQejqnFdAFksU2akX3IaQo7oi/exec';
+
+const LOCS_DEFAULT = ['倉庫1F', '倉庫2F', '階段下', '店舗', 'その他'];
+const $ = id => document.getElementById(id);
+const S = { user: '', group: null, loc: '', locs: LOCS_DEFAULT, groups: [], name: '', existing: 0, seq: 0, hist: [], cam: null, busy: false };
+const ls = { get: (k, d = '') => { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } },
+             set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const norm = v => String(v ?? '').replace(/[０-９Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\s+/g, '');
+const pad = n => String(n).padStart(2, '0');
+const hm = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const ymdhms = t => { const d = new Date(t); return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+
+function toast(m, err) { const t = $('toast'); t.textContent = m; t.className = err ? 'err' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', err ? 4500 : 2200); }
+function note(m) { $('note').textContent = m || ''; $('note').style.display = m ? 'block' : 'none'; }
+
+/* ---------- サーバーとのやり取り ---------- */
+class NetError extends Error {}
+async function api(action, params = {}, post = false) {
+  if (!/^https:\/\/script\.google\.com\//.test(API_URL)) throw new Error('API_URL が設定されていません（index.html の先頭）');
+  let res;
+  try {
+    if (post) res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action, ...params }) });
+    else { const u = new URL(API_URL); u.searchParams.set('action', action); for (const k in params) u.searchParams.set(k, params[k]); res = await fetch(u); }
+  } catch (e) { throw new NetError('通信できません'); }
+  let j; try { j = await res.json(); } catch (e) { throw new NetError('サーバーの応答が読めません'); }
+  if (!j.ok) throw new Error(j.error || 'エラー');
+  return j.data;
+}
+
+/* ---------- 未送信（電波がないときは端末に保存して、あとで自動送信） ---------- */
+const Q = {
+  list() { try { return JSON.parse(ls.get('tana_queue', '[]')); } catch (e) { return []; } },
+  save(a) { ls.set('tana_queue', JSON.stringify(a)); renderPending(); },
+  push(x) { const a = this.list(); a.push(x); this.save(a); },
+};
+function renderPending() { const n = Q.list().length; $('pending').textContent = `未送信 ${n}`; $('pending').style.display = n ? 'inline-block' : 'none'; }
+let flushing = false;
+async function flush() {
+  if (flushing) return; flushing = true;
+  try {
+    let a = Q.list();
+    while (a.length) {
+      try { await api('add', a[0], true); }
+      catch (e) { if (e instanceof NetError) break; toast('未送信の1件を送れませんでした：' + e.message, true); }
+      a = Q.list(); a.shift(); Q.save(a);
+    }
+    if (!Q.list().length && S.group) loadHist();
+  } finally { flushing = false; }
+}
+setInterval(flush, 20000);
+addEventListener('online', flush);
+
+/* ---------- タブ ---------- */
+async function tab(which) {
+  $('tabCount').classList.toggle('on', which === 'count'); $('tabCsv').classList.toggle('on', which === 'csv');
+  $('vCount').classList.toggle('hidden', which !== 'count'); $('vCsv').classList.toggle('hidden', which !== 'csv');
+  window.scrollTo(0, 0);
+  if (which === 'csv') { await renderCsvGroups(); if ($('csvGroup').value) loadSummary(); }
+}
+$('tabCount').onclick = () => tab('count');
+$('tabCsv').onclick = () => tab('csv');
+
+/* ---------- 手順の画面 ---------- */
+function show(id) {
+  ['s-user', 's-group', 's-loc', 's-scan'].forEach(s => $(s).classList.toggle('hidden', s !== id));
+  window.scrollTo(0, 0);
+  if (id === 's-user') $('user').focus();
+  if (id === 's-group') loadGroups();
+  if (id === 's-scan') { renderCtx(); resetEntry(); loadHist(); }
+}
+function renderCtx() {
+  $('ctx').innerHTML = `<span>👤 <b>${esc(S.user)}</b><button data-go="s-user">変更</button></span>
+    <span>📅 <b>${esc(S.group.name)}</b><button data-go="s-group">変更</button></span>
+    <span>📍 <b>${esc(S.loc)}</b><button data-go="s-loc">ロケーションを変更</button></span>`;
+}
+$('ctx').addEventListener('click', e => { const g = e.target.dataset.go; if (g) show(g); });
+
+$('userNext').onclick = () => {
+  const v = $('user').value.trim();
+  if (!v) return toast('名前を入力してください', true);
+  S.user = v; ls.set('tana_user', v); show('s-group');
+};
+$('user').addEventListener('keydown', e => { if (e.key === 'Enter') $('userNext').click(); });
+
+async function loadGroups() {
+  try {
+    const d = await api('init');
+    S.groups = d.groups; S.locs = d.locations || LOCS_DEFAULT;
+    if (!$('newgroup').value) $('newgroup').value = d.today + ' 棚卸';
+    $('groups').innerHTML = S.groups.length
+      ? S.groups.map(g => `<button data-g="${esc(g.id)}">${esc(g.name)}<small>作成 ${esc(hm(g.createdAt))}　${esc(g.createdBy)}</small></button>`).join('')
+      : '<p class="muted">まだ棚卸がありません。下の「＋ 新規棚卸」から作成してください。</p>';
+    renderLocs();
+    return d;
+  } catch (e) { $('groups').innerHTML = `<p class="muted">読み込めませんでした：${esc(e.message)}</p>`; }
+}
+$('groups').addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (b) pickGroup(S.groups.find(g => g.id === b.dataset.g)); });
+$('mkGroup').onclick = async () => {
+  const name = $('newgroup').value.trim();
+  if (!name) return toast('グループ名を入力してください', true);
+  const b = $('mkGroup'); b.disabled = true;
+  try { pickGroup(await api('createGroup', { name, user: S.user }, true)); }
+  catch (e) { toast(e.message, true); } finally { b.disabled = false; }
+};
+function pickGroup(g) { if (!g) return; S.group = g; ls.set('tana_group', JSON.stringify(g)); show('s-loc'); }
+
+function renderLocs() {
+  $('locs').innerHTML = S.locs.map(l => `<button data-l="${esc(l)}" class="${l === S.loc ? 'on' : ''}">${esc(l)}</button>`).join('');
+}
+$('locs').addEventListener('click', e => {
+  const b = e.target.closest('[data-l]'); if (!b) return;
+  S.loc = b.dataset.l; ls.set('tana_loc', S.loc); renderLocs(); show('s-scan');
+});
+
+/* ---------- コード入力 → 商品名 ---------- */
+function setName(t, cls) { $('pname').textContent = t; $('pname').className = cls || ''; }
+function resetEntry() {
+  S.seq++; S.name = ''; S.existing = 0;
+  $('code').value = ''; $('qty').value = 1; $('exist').classList.add('hidden');
+  setName('コードを入力するか、📷で読み取ってください');
+  setTimeout(() => $('code').focus(), 60);
+}
+function queuedQty(code) { return Q.list().filter(x => x.groupId === S.group.id && x.location === S.loc && x.code === code).reduce((s, x) => s + x.qty, 0); }
+async function lookup() {
+  const code = norm($('code').value);
+  if (!code) return;
+  $('code').value = code;
+  const seq = ++S.seq;
+  S.name = ''; S.existing = 0; $('exist').classList.add('hidden');
+  setName('商品名を検索中…');
+  try {
+    const r = await api('lookup', { code, groupId: S.group.id, location: S.loc });
+    if (seq !== S.seq) return;
+    S.name = r.name; S.existing = r.existing + queuedQty(code);
+    if (r.found) setName('✅ ' + r.name, 'ok');
+    else setName('⚠️ Squareに登録が見つかりません（このまま登録もできます）' + (r.error ? '\n' + r.error : ''), 'ng');
+  } catch (e) {
+    if (seq !== S.seq) return;
+    S.existing = queuedQty(code);
+    setName(e instanceof NetError ? '📴 電波がないため商品名を確認できません（登録はできます。あとで自動送信）' : '⚠️ ' + e.message, 'ng');
+  }
+  if (S.existing > 0) { $('exist').textContent = `この場所にすでに ${S.existing} 個登録されています`; $('exist').classList.remove('hidden'); }
+  $('qty').focus(); $('qty').select();
+}
+$('code').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); lookup(); } });
+$('code').addEventListener('change', lookup);
+$('qty').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('regBtn').click(); } });
+$('minus').onclick = () => { $('qty').value = Math.max(0, (+$('qty').value || 0) - 1); };
+$('plus').onclick = () => { $('qty').value = (+$('qty').value || 0) + 1; };
+$('cancelBtn').onclick = resetEntry;
+
+/* ---------- 登録 ---------- */
+$('regBtn').onclick = () => {
+  const code = norm($('code').value), qty = Number($('qty').value);
+  if (!code) return toast('コードを入力してください', true);
+  if (!Number.isFinite(qty) || qty < 0 || $('qty').value === '') return toast('数量を入力してください', true);
+  if (S.existing > 0) {
+    $('dlgText').textContent = `${S.name || code}\n${S.loc} に ${S.existing} 個登録済みです。今回：${qty} 個`;
+    $('dlgText').style.whiteSpace = 'pre-line';
+    $('dlg').classList.remove('hidden');
+    return;
+  }
+  send('add');
+};
+$('dlgAdd').onclick = () => { $('dlg').classList.add('hidden'); send('add'); };
+$('dlgOver').onclick = () => { $('dlg').classList.add('hidden'); send('overwrite'); };
+$('dlgCancel').onclick = () => { $('dlg').classList.add('hidden'); resetEntry(); };
+
+async function send(mode) {
+  if (S.busy) return; S.busy = true;
+  const rec = { clientId: uid(), at: Date.now(), groupId: S.group.id, user: S.user, location: S.loc,
+    code: norm($('code').value), name: S.name, qty: Number($('qty').value), mode };
+  $('regBtn').disabled = true;
+  try {
+    if (Q.list().length) throw new NetError('queue'); // 未送信があるときは順番を守って後ろに並べる
+    await api('add', rec, true);
+    toast(mode === 'overwrite' ? `数え直しました（${rec.qty} 個）` : `登録しました（${rec.qty} 個）`);
+    loadHist();
+  } catch (e) {
+    if (e instanceof NetError) { Q.push(rec); toast('端末に保存しました。電波が戻ると自動で送信します'); renderHist(); flush(); }
+    else { toast(e.message, true); S.busy = false; $('regBtn').disabled = false; return; }
+  }
+  S.busy = false; $('regBtn').disabled = false;
+  resetEntry();
+}
+
+/* ---------- 自分の履歴 ---------- */
+async function loadHist() {
+  if (!S.group) return;
+  try { S.hist = await api('myRecords', { groupId: S.group.id, user: S.user, limit: 100 }); } catch (e) {}
+  renderHist();
+}
+function renderHist() {
+  const q = Q.list().filter(x => x.groupId === S.group.id && x.user === S.user).reverse()
+    .map(x => ({ ...x, pending: true }));
+  const all = q.concat(S.hist);
+  $('histSum').textContent = `${S.hist.length} 件・${S.hist.reduce((s, r) => s + r.qty, 0)} 個`;
+  $('hist').innerHTML = all.length ? all.map(r => `
+    <div class="item"><div><div>${esc(r.name || '（商品名なし）')}${r.pending ? '<span class="tag">未送信</span>' : ''}${r.mode === 'overwrite' ? '<span class="tag">上書き</span>' : ''}</div>
+      <div class="meta">${esc(r.code)}｜${esc(r.location)}｜${esc(hm(r.at))}</div></div>
+      <div class="row" style="align-items:center"><span class="q">${esc(r.qty)}</span>${r.pending ? '' : `<button data-del="${esc(r.id)}">取消</button>`}</div></div>`).join('')
+    : '<p class="muted">まだ登録がありません。</p>';
+}
+$('hist').addEventListener('click', async e => {
+  const b = e.target.closest('[data-del]'); if (!b) return;
+  if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = '取消する'; setTimeout(() => { b.classList.remove('armed'); b.textContent = '取消'; }, 3000); return; }
+  b.disabled = true;
+  try { await api('remove', { id: b.dataset.del }, true); toast('取り消しました'); loadHist(); }
+  catch (err) { toast(err.message, true); b.disabled = false; }
+});
+
+/* ---------- カメラ（かざすだけで読み取り） ---------- */
+function validEan(c) {
+  if (!/^\d+$/.test(c)) return true;            // 数字以外（CODE128等）はそのまま
+  if (![8, 12, 13].includes(c.length)) return true;
+  const d = c.split('').map(Number), chk = d.pop();
+  const sum = d.reverse().reduce((s, n, i) => s + n * (i % 2 === 0 ? 3 : 1), 0);
+  return (10 - sum % 10) % 10 === chk;            // チェック数字で読み間違いを防ぐ
+}
+$('camBtn').onclick = openCam;
+async function openCam() {
+  if (!window.Html5Qrcode) return toast('読み取り機能を読み込めませんでした。通信を確認してください', true);
+  $('camwrap').classList.remove('hidden');
+  const F = Html5QrcodeSupportedFormats;
+  S.cam = new Html5Qrcode('cam', { formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF],
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false });
+  let last = '', hits = 0;
+  try {
+    await S.cam.start({ facingMode: 'environment' },
+      { fps: 15, disableFlip: true, videoConstraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } },
+      text => {
+        const c = norm(text);
+        if (!validEan(c)) return;
+        hits = (c === last) ? hits + 1 : 1; last = c;
+        if (hits < 2) return;                         // 同じ値を2回続けて読めたら確定
+        if (navigator.vibrate) navigator.vibrate(80);
+        closeCam(); $('code').value = c; lookup();
+      }, () => {});
+    try {
+      const t = S.cam.getRunningTrackCameraCapabilities().torchFeature();
+      if (t.isSupported()) { $('torchBtn').classList.remove('hidden'); $('torchBtn').onclick = async () => { await t.apply(!t.value()); }; }
+    } catch (e) {}
+  } catch (e) {
+    closeCam();
+    toast('カメラを起動できません。SafariかChromeで開き、カメラの使用を許可してください', true);
+  }
+}
+async function closeCam() {
+  $('camwrap').classList.add('hidden'); $('torchBtn').classList.add('hidden');
+  const c = S.cam; S.cam = null;
+  if (c) { try { if (c.isScanning) await c.stop(); c.clear(); } catch (e) {} }
+}
+$('camClose').onclick = () => { closeCam(); $('code').focus(); };
+
+/* ---------- CSV出力・集計 ---------- */
+async function renderCsvGroups() {
+  if (!S.groups.length) await loadGroups();
+  const cur = $('csvGroup').value || (S.group && S.group.id) || '';
+  $('csvGroup').innerHTML = S.groups.map(g => `<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('') || '<option value="">（棚卸がありません）</option>';
+  if (cur) $('csvGroup').value = cur;
+}
+$('csvGroup').onchange = loadSummary;
+$('csvLoad').onclick = loadSummary;
+let SUM = null;
+async function loadSummary() {
+  const gid = $('csvGroup').value; if (!gid) return;
+  $('csvBody').innerHTML = '<div class="card"><p class="muted">集計中…</p></div>';
+  try { SUM = await api('summary', { groupId: gid }); SUM.groupName = (S.groups.find(g => g.id === gid) || {}).name || ''; renderSummary(); }
+  catch (e) { $('csvBody').innerHTML = `<div class="card"><p class="muted">読み込めませんでした：${esc(e.message)}</p></div>`; }
+}
+const qsum = rows => rows.reduce((s, r) => s + r.qty, 0);
+function table(rows) {
+  const sorted = rows.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));
+  return `<table><thead><tr><th>コード</th><th>商品名</th><th class="n">数量</th></tr></thead><tbody>${
+    sorted.map(r => `<tr><td class="c">${esc(r.code)}</td><td>${esc(r.name || '—')}</td><td class="n">${esc(r.qty)}</td></tr>`).join('')}</tbody></table>`;
+}
+function section(title, key, rows) {
+  return `<section class="card"><div class="sumhead"><h3>${esc(title)}</h3><span>${rows.length} 品目・${qsum(rows)} 個</span></div>
+    <button class="sub" data-csv="${esc(key)}">「${esc(title)}」のCSVをダウンロード</button>
+    <details><summary>中身を見る</summary>${table(rows)}</details></section>`;
+}
+function renderSummary() {
+  const locs = S.locs.filter(l => SUM.locations[l]).concat(Object.keys(SUM.locations).filter(l => !S.locs.includes(l)));
+  $('csvBody').innerHTML = `
+    <section class="card"><div class="sumhead"><h3>まとめてダウンロード</h3><span>登録 ${SUM.recordCount} 件</span></div>
+      <button data-csv="__byloc">ロケーション別まとめ（全ロケーション1ファイル）</button>
+      <button class="sub" data-csv="__detail">明細（登録1件ごと）</button></section>
+    ${section('全体のまとめ', '__total', SUM.total)}
+    ${locs.map(l => section(l, l, SUM.locations[l])).join('')}`;
+}
+const cell = v => { const s = String(v ?? ''); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+function download(filename, rows) {
+  const csv = '﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n'); // 先頭のBOMでExcelでも文字化けしない
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = filename.replace(/[\\/:*?"<>|\s]/g, '_');
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+$('csvBody').addEventListener('click', e => {
+  const b = e.target.closest('[data-csv]'); if (!b || !SUM) return;
+  const k = b.dataset.csv, g = SUM.groupName;
+  const sortRows = rows => rows.slice().sort((a, b) => a.code.localeCompare(b.code));
+  if (k === '__total') download(`棚卸_${g}_全体.csv`, [['コード', '商品名', '数量']].concat(sortRows(SUM.total).map(r => [r.code, r.name, r.qty])));
+  else if (k === '__byloc') {
+    const rows = [['ロケーション', 'コード', '商品名', '数量']];
+    Object.keys(SUM.locations).forEach(l => sortRows(SUM.locations[l]).forEach(r => rows.push([l, r.code, r.name, r.qty])));
+    download(`棚卸_${g}_ロケーション別.csv`, rows);
+  } else if (k === '__detail') download(`棚卸_${g}_明細.csv`, [['登録日時', '作業者', 'ロケーション', 'コード', '商品名', '数量']]
+      .concat(SUM.details.map(r => [ymdhms(r.at), r.user, r.location, r.code, r.name, r.qty])));
+  else download(`棚卸_${g}_${k}.csv`, [['コード', '商品名', '数量']].concat(sortRows(SUM.locations[k]).map(r => [r.code, r.name, r.qty])));
+});
+
+/* ---------- 起動 ---------- */
+renderPending();
+S.user = ls.get('tana_user'); $('user').value = S.user;
+try { S.group = JSON.parse(ls.get('tana_group', 'null')); } catch (e) {}
+S.loc = ls.get('tana_loc');
+renderLocs();
+if (!/^https:\/\/script\.google\.com\//.test(API_URL)) note('準備中：index.html の先頭に Apps Script のURLを設定してください。');
+// 前回の続きから（名前・グループ・ロケーションが保存されていれば入力画面へ）
+if (S.user && S.group && S.locs.includes(S.loc)) show('s-scan');
+else if (S.user && S.group) show('s-loc');
+else if (S.user) show('s-group');
+else show('s-user');
+flush();
+}
+</script>
+</body>
+</html>
