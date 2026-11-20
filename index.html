@@ -68,17 +68,17 @@ td.c{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--mute);font
 details summary{cursor:pointer;color:#1d5fd6;font-size:14px;margin-top:8px}
 /* カメラ */
 #camwrap{position:fixed;inset:0;background:#000;z-index:40;display:flex;flex-direction:column}
-#camview{position:relative;flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
-#cam{width:100%}
-#cam video{width:100%!important;height:auto!important;display:block}
-#guide{position:absolute;left:7.5%;right:7.5%;top:50%;height:34vw;max-height:170px;transform:translateY(-50%);border:3px solid #fff;border-radius:10px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45);pointer-events:none}
-#guide::after{content:"";position:absolute;left:4%;right:4%;top:50%;height:3px;margin-top:-1.5px;background:#ff2a2a;box-shadow:0 0 8px #ff2a2a;animation:blink 1.2s ease-in-out infinite}
+#camview{position:relative;flex:1;overflow:hidden}
+#camvideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+#guide{position:absolute;left:6%;right:6%;top:42%;height:min(46vw,240px);transform:translateY(-50%);border:3px solid #fff;border-radius:12px;box-shadow:0 0 0 100vmax rgba(0,0,0,.42);pointer-events:none;transition:border-color .15s}
+#guide.hit{border-color:#3ddc84}
+#guide::after{content:"";position:absolute;left:3%;right:3%;top:50%;height:3px;margin-top:-1.5px;background:#ff2a2a;box-shadow:0 0 8px #ff2a2a;animation:blink 1.2s ease-in-out infinite}
 @keyframes blink{50%{opacity:.35}}
 @media (prefers-reduced-motion:reduce){#guide::after{animation:none}}
-#camtip{position:absolute;left:0;right:0;top:calc(50% + min(17vw,85px) + 14px);text-align:center;color:#fff;font-size:15px;text-shadow:0 1px 3px #000;padding:0 16px}
-.cambar{display:flex;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:#000}
-.cambar button{margin:0;background:#2a2c30}
-#torchBtn{width:auto;flex:none}
+#camtip{position:absolute;left:0;right:0;top:calc(42% + min(23vw,120px) + 14px);text-align:center;color:#fff;font-size:15px;text-shadow:0 1px 3px #000;padding:0 16px}
+.cambar{display:flex;gap:8px;padding:12px 12px calc(12px + env(safe-area-inset-bottom));background:#000}
+.cambar button{margin:0;background:#2a2c30;font-size:15px;padding:10px 8px}
+.cambar .sm{width:auto;flex:none;padding:10px 14px}
 /* ダイアログ */
 #dlg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:45;display:flex;align-items:center;justify-content:center;padding:16px}
 #dlg .card{max-width:420px;width:100%;margin:0}
@@ -156,11 +156,18 @@ details summary{cursor:pointer;color:#1d5fd6;font-size:14px;margin-top:8px}
 <!-- カメラ -->
 <div id="camwrap" class="hidden">
   <div id="camview">
-    <div id="cam"></div>
+    <video id="camvideo" playsinline muted autoplay></video>
     <div id="guide"></div>
-    <div id="camtip">枠に入れて、赤い線にバーコードを合わせる</div>
+    <div id="camtip">枠に入れて赤い線に合わせる（15〜20cm離すとピントが合いやすい）</div>
   </div>
-  <div class="cambar"><button id="torchBtn" class="hidden">💡 ライト</button><button id="camClose">閉じる</button></div>
+  <div class="cambar">
+    <button id="switchBtn" class="sm hidden">🔄 切替</button>
+    <button id="zoomBtn" class="sm hidden">🔍 2倍</button>
+    <button id="torchBtn" class="sm hidden">💡 ライト</button>
+    <button id="photoBtn">📸 写真で読む</button>
+    <button id="camClose" class="sm">閉じる</button>
+  </div>
+  <input id="camfile" type="file" accept="image/*" capture="environment" class="hidden">
 </div>
 
 <!-- 重複ダイアログ -->
@@ -175,7 +182,6 @@ details summary{cursor:pointer;color:#1d5fd6;font-size:14px;margin-top:8px}
 </div>
 <div id="toast"></div>
 
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 {
 /* ★ ここに Apps Script の「ウェブアプリURL」を貼り付けます ★ */
@@ -392,48 +398,221 @@ $('hist').addEventListener('click', async e => {
   catch (err) { toast(err.message, true); b.disabled = false; }
 });
 
-/* ---------- カメラ（かざすだけで読み取り） ---------- */
+/* ---------- カメラ（かざすだけで読み取り） ----------
+   読み取りエンジン：AndroidのChromeは端末内蔵の読み取り機能、
+   iPhoneなどは高精度な ZXing（zxing-cpp）を使います。
+   枠の中だけを切り出して読むので、小さいバーコードでも読み取りやすくしています。 */
+const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'];
+let detectorP = null;
+function getDetector() {
+  if (detectorP) return detectorP;
+  detectorP = (async () => {
+    try {
+      if ('BarcodeDetector' in window) {
+        const sup = await window.BarcodeDetector.getSupportedFormats();
+        if (sup.includes('ean_13')) return new window.BarcodeDetector({ formats: FORMATS.filter(f => sup.includes(f)) });
+      }
+    } catch (e) {}
+    const m = await import('https://cdn.jsdelivr.net/npm/barcode-detector@3.2.2/dist/es/ponyfill.js/+esm');
+    return new m.BarcodeDetector({ formats: FORMATS });
+  })();
+  detectorP.catch(() => { detectorP = null; });
+  return detectorP;
+}
+// 起動を速くするため、ページを開いたら読み取りエンジンを先に準備しておく
+setTimeout(async () => {
+  try { const d = await getDetector(); const c = document.createElement('canvas'); c.width = c.height = 8; await d.detect(c); } catch (e) {}
+}, 1500);
+
 function validEan(c) {
-  if (!/^\d+$/.test(c)) return true;            // 数字以外（CODE128等）はそのまま
-  if (![8, 12, 13].includes(c.length)) return true;
+  if (!/^\d+$/.test(c) || ![8, 12, 13].includes(c.length)) return null;   // EAN/UPC以外
   const d = c.split('').map(Number), chk = d.pop();
   const sum = d.reverse().reduce((s, n, i) => s + n * (i % 2 === 0 ? 3 : 1), 0);
-  return (10 - sum % 10) % 10 === chk;            // チェック数字で読み間違いを防ぐ
+  return (10 - sum % 10) % 10 === chk;                                      // チェック数字で読み間違いを防ぐ
 }
-$('camBtn').onclick = openCam;
-async function openCam() {
-  if (!window.Html5Qrcode) return toast('読み取り機能を読み込めませんでした。通信を確認してください', true);
-  $('camwrap').classList.remove('hidden');
-  const F = Html5QrcodeSupportedFormats;
-  S.cam = new Html5Qrcode('cam', { formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF],
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false });
-  let last = '', hits = 0;
+let audioCtx = null;
+function beep() {
   try {
-    await S.cam.start({ facingMode: 'environment' },
-      { fps: 15, disableFlip: true, videoConstraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } },
-      text => {
-        const c = norm(text);
-        if (!validEan(c)) return;
-        hits = (c === last) ? hits + 1 : 1; last = c;
-        if (hits < 2) return;                         // 同じ値を2回続けて読めたら確定
-        if (navigator.vibrate) navigator.vibrate(80);
-        closeCam(); $('code').value = c; lookup();
-      }, () => {});
-    try {
-      const t = S.cam.getRunningTrackCameraCapabilities().torchFeature();
-      if (t.isSupported()) { $('torchBtn').classList.remove('hidden'); $('torchBtn').onclick = async () => { await t.apply(!t.value()); }; }
-    } catch (e) {}
+    if (!audioCtx) return;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.frequency.value = 1500; g.gain.value = 0.15; o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + 0.12);
+  } catch (e) {}
+}
+
+const C = { stream: null, track: null, det: null, timer: 0, busy: false, n: 0, last: '', hits: 0, zoom: 1 };
+const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+
+$('camBtn').onclick = openCam;
+const TIP = '枠に入れて赤い線に合わせる（15〜20cm離すとピントが合いやすい）';
+async function startStream(deviceId) {
+  if (C.stream) C.stream.getTracks().forEach(t => t.stop());
+  const video = deviceId ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+                         : { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } };
+  C.stream = await navigator.mediaDevices.getUserMedia({ audio: false, video });
+  C.track = C.stream.getVideoTracks()[0];
+  const v = $('camvideo'); v.srcObject = C.stream; await v.play();
+  try { await C.track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch (e) {}
+  setupCamButtons();
+}
+// 背面カメラの一覧（iPhoneは近くにピントが合う「トリプル／デュアル広角」を優先）
+async function backCameras() {
+  try {
+    const all = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    const back = all.filter(d => /back|rear|environment|背面|後/i.test(d.label));
+    return back.length ? back : all;
+  } catch (e) { return []; }
+}
+async function openCam() {
+  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (e) {}
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('この画面ではカメラが使えません。SafariかChromeで開いてください', true);
+  $('camwrap').classList.remove('hidden');
+  $('camtip').textContent = 'カメラを起動中…';
+  const detP = getDetector();
+  try {
+    const saved = ls.get('tana_cam');
+    await startStream(saved || null).catch(() => startStream(null));
+    C.cams = await backCameras();
+    if (!saved && /iPhone|iPad/.test(navigator.userAgent)) {
+      const pref = C.cams.find(d => /triple|トリプル/i.test(d.label)) || C.cams.find(d => /dual wide|デュアル広角/i.test(d.label));
+      if (pref && pref.deviceId !== (C.track.getSettings() || {}).deviceId) await startStream(pref.deviceId).catch(() => {});
+    }
+    $('switchBtn').classList.toggle('hidden', C.cams.length < 2);
   } catch (e) {
     closeCam();
-    toast('カメラを起動できません。SafariかChromeで開き、カメラの使用を許可してください', true);
+    return toast('カメラを起動できません。SafariかChromeで開き、カメラの使用を許可してください', true);
+  }
+  try { C.det = await detP; }
+  catch (e) { $('camtip').textContent = '読み取りエンジンを読み込めません（通信を確認）。「写真で読む」か手入力をお使いください'; return; }
+  $('camtip').textContent = TIP;
+  C.n = 0; C.last = ''; C.hits = 0;
+  scanLoop();
+}
+$('switchBtn').onclick = async () => {
+  if (!C.cams || C.cams.length < 2) return;
+  const cur = (C.track.getSettings() || {}).deviceId;
+  const i = C.cams.findIndex(d => d.deviceId === cur);
+  const next = C.cams[(i + 1) % C.cams.length];
+  try { await startStream(next.deviceId); ls.set('tana_cam', next.deviceId); toast(next.label || 'カメラを切り替えました'); } catch (e) { toast('切り替えできませんでした', true); }
+};
+function setupCamButtons() {
+  $('torchBtn').classList.add('hidden'); $('zoomBtn').classList.add('hidden');
+  let caps = {};
+  try { caps = C.track.getCapabilities ? C.track.getCapabilities() : {}; } catch (e) {}
+  if (caps.torch) {
+    let on = false;
+    $('torchBtn').classList.remove('hidden');
+    $('torchBtn').onclick = async () => { on = !on; try { await C.track.applyConstraints({ advanced: [{ torch: on }] }); } catch (e) {} };
+  }
+  if (caps.zoom && caps.zoom.max >= 2) {
+    C.zoom = 1;
+    $('zoomBtn').classList.remove('hidden'); $('zoomBtn').textContent = '🔍 2倍';
+    $('zoomBtn').onclick = async () => {
+      C.zoom = C.zoom === 1 ? 2 : 1;
+      try { await C.track.applyConstraints({ advanced: [{ zoom: C.zoom }] }); } catch (e) {}
+      $('zoomBtn').textContent = C.zoom === 1 ? '🔍 2倍' : '🔍 1倍';
+    };
   }
 }
-async function closeCam() {
-  $('camwrap').classList.add('hidden'); $('torchBtn').classList.add('hidden');
-  const c = S.cam; S.cam = null;
-  if (c) { try { if (c.isScanning) await c.stop(); c.clear(); } catch (e) {} }
+// 画面上の枠が、カメラ映像のどこに当たるかを計算（上下に少し余裕を持たせる）
+function guideRect(v) {
+  const box = $('camview').getBoundingClientRect(), g = $('guide').getBoundingClientRect();
+  const vw = v.videoWidth, vh = v.videoHeight;
+  const s = Math.max(box.width / vw, box.height / vh);
+  const ox = (box.width - vw * s) / 2, oy = (box.height - vh * s) / 2;
+  let x = (g.left - box.left - ox) / s, y = (g.top - box.top - oy) / s, w = g.width / s, h = g.height / s;
+  x -= w * 0.04; w *= 1.08; y -= h * 0.35; h *= 1.7;
+  x = Math.max(0, x); y = Math.max(0, y);
+  return { x, y, w: Math.min(vw - x, w), h: Math.min(vh - y, h) };
+}
+// 横方向にシャープ化（ピントが少し甘いバーコードも読めるようにする）
+function sharpen(amt) {
+  const W = cv.width, H = cv.height, id = cx.getImageData(0, 0, W, H), s = id.data, g = new Float32Array(W), R = 2;
+  for (let y = 0; y < H; y++) {
+    const r = y * W * 4;
+    for (let x = 0; x < W; x++) { const i = r + x * 4; g[x] = 0.299 * s[i] + 0.587 * s[i + 1] + 0.114 * s[i + 2]; }
+    let sum = 0, n = 0;
+    for (let x = 0; x <= R && x < W; x++) { sum += g[x]; n++; }
+    for (let x = 0; x < W; x++) {
+      const v = g[x] + amt * (g[x] - sum / n), i = r + x * 4;
+      s[i] = s[i + 1] = s[i + 2] = v;
+      if (x + R + 1 < W) { sum += g[x + R + 1]; n++; }
+      if (x - R >= 0) { sum -= g[x - R]; n--; }
+    }
+  }
+  cx.putImageData(id, 0, 0);
+}
+async function scanLoop() {
+  if (!C.stream || !C.det) return;
+  const v = $('camvideo');
+  if (v.readyState >= 2 && v.videoWidth && !C.busy) {
+    C.busy = true;
+    try {
+      // 1コマごとに読み方を変える：そのまま → 弱いシャープ → 強いシャープ → 画面全体
+      const mode = C.n++ % 4;
+      const full = mode === 3;
+      const r = full ? { x: 0, y: 0, w: v.videoWidth, h: v.videoHeight } : guideRect(v);
+      const k = Math.min(1, (full ? 1280 : 1400) / r.w);
+      cv.width = Math.max(1, Math.round(r.w * k)); cv.height = Math.max(1, Math.round(r.h * k));
+      cx.drawImage(v, r.x, r.y, r.w, r.h, 0, 0, cv.width, cv.height);
+      if (mode === 1) sharpen(1.5); else if (mode === 2) sharpen(3);
+      const res = await C.det.detect(cv);
+      for (const b of res) {
+        const c = norm(b.rawValue);
+        const ok = validEan(c);
+        if (ok === false) continue;                     // チェック数字が合わない＝読み間違い
+        if (ok === null) {                              // EAN以外は同じ値を2回読めたら確定
+          C.hits = c === C.last ? C.hits + 1 : 1; C.last = c;
+          if (C.hits < 2) continue;
+        }
+        C.busy = false;
+        return scanned(c);
+      }
+    } catch (e) {}
+    C.busy = false;
+  }
+  C.timer = setTimeout(scanLoop, 30);
+}
+function scanned(code) {
+  $('guide').classList.add('hit');
+  beep(); if (navigator.vibrate) navigator.vibrate(80);
+  setTimeout(() => { closeCam(); $('code').value = code; lookup(); }, 150);
+}
+function closeCam() {
+  clearTimeout(C.timer);
+  $('camwrap').classList.add('hidden'); $('guide').classList.remove('hit');
+  $('torchBtn').classList.add('hidden'); $('zoomBtn').classList.add('hidden'); $('switchBtn').classList.add('hidden');
+  if (C.stream) C.stream.getTracks().forEach(t => t.stop());
+  C.stream = null; C.track = null; C.det = null;
+  const v = $('camvideo'); v.srcObject = null;
 }
 $('camClose').onclick = () => { closeCam(); $('code').focus(); };
+
+// 予備：写真を撮って読み取る（かざして読めないとき）
+$('photoBtn').onclick = () => { $('camfile').value = ''; $('camfile').click(); };
+$('camfile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('camtip').textContent = '写真を読み取り中…';
+  try {
+    const det = await getDetector();
+    const bmp = await createImageBitmap(f);
+    let found = '';
+    for (const max of [1600, 2400, 1000]) {             // 大きさを変えて何度か試す
+      const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+      cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+      cx.drawImage(bmp, 0, 0, cv.width, cv.height);
+      for (const amt of [0, 2]) {
+        if (amt) { cx.drawImage(bmp, 0, 0, cv.width, cv.height); sharpen(amt); }
+        const res = await det.detect(cv);
+        const hit = res.map(b => norm(b.rawValue)).find(c => validEan(c) !== false);
+        if (hit) { found = hit; break; }
+      }
+      if (found) break;
+    }
+    if (found) return scanned(found);
+    $('camtip').textContent = '写真から読み取れませんでした。バーコードを大きく、まっすぐ撮ってください';
+  } catch (err) { $('camtip').textContent = '読み取りに失敗しました。手入力をお使いください'; }
+});
 
 /* ---------- CSV出力・集計 ---------- */
 async function renderCsvGroups() {
