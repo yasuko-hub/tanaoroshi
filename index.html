@@ -185,7 +185,7 @@ details summary{cursor:pointer;color:#1d5fd6;font-size:14px;margin-top:8px}
 <script>
 {
 /* ★ ここに Apps Script の「ウェブアプリURL」を貼り付けます ★ */
-const API_URL = 'https://script.google.com/macros/s/AKfycbwYZWQYSbpzUKbCCjctNeXubEbiyDM6_GBrC2BR7RpMQejqnFdAFksU2akX3IaQo7oi/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbz8qAcosoBKX4r-3ssqD4Go4tRHmWj9JqSi4kdaLiWqCjhUrVAityhmOCGF8u8oCzD6/exec';
 
 const LOCS_DEFAULT = ['倉庫1F', '倉庫2F', '階段下', '店舗', 'その他'];
 const $ = id => document.getElementById(id);
@@ -686,6 +686,10 @@ else if (S.user && S.group) show('s-loc');
 else if (S.user) show('s-group');
 else show('s-user');
 flush();
+// 保存していた棚卸グループがもう無いとき（データの置き場所を店舗管理に移したときなど）は選び直してもらう
+if (S.group) api('init').then(d => {
+  if (!d.groups.some(g => g.id === S.group.id)) { S.group = null; ls.set('tana_group', 'null'); toast('棚卸グループを選び直してください'); show(S.user ? 's-group' : 's-user'); }
+}).catch(() => {});
 }
 </script>
 </body>
