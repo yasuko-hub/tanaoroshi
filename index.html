@@ -14,6 +14,17 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system
 header{position:sticky;top:0;z-index:10;background:var(--ink);color:#fff;padding:calc(8px + env(safe-area-inset-top)) max(4vw,12px) 0}
 .hrow{display:flex;align-items:center;gap:10px}
 header h1{margin:0;font-size:17px;flex:1}
+#modeBar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+#modeBar label{display:flex;align-items:center;gap:10px;font-weight:700;cursor:pointer;margin:0}
+#modeBar input{width:22px;height:22px;min-height:0;accent-color:var(--acc)}
+#modeBar small{color:var(--mute);font-weight:400;display:block}
+#contBox{text-align:center;padding:10px 0 4px}
+#contBox .big{font-size:56px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+#contLast{font-size:15px;color:var(--mute);min-height:1.5em;font-variant-numeric:tabular-nums}
+.cont .normalOnly{display:none!important}
+body:not(.cont) .contOnly{display:none!important}
+#camCount{position:absolute;left:0;right:0;top:12px;text-align:center;color:#fff;font-size:20px;font-weight:700;text-shadow:0 1px 4px #000;pointer-events:none}
+#camCount b{font-size:34px;color:#3ddc84}
 #pending{display:none;background:var(--acc);color:#fff;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:700}
 nav{display:flex;gap:4px;margin-top:6px}
 nav button{all:unset;cursor:pointer;padding:8px 14px;font-size:15px;color:#aeb2b8;border-bottom:3px solid transparent}
@@ -119,19 +130,22 @@ details summary{cursor:pointer;color:#1d5fd6;font-size:14px;margin-top:8px}
     <section id="s-scan" class="hidden">
       <div class="card">
         <div class="ctx" id="ctx"></div>
+        <div id="modeBar"><label><input type="checkbox" id="contMode"><span>連続読み込みモード<small>1回読むたびに1個。商品名・確認なしで次々読めます</small></span></label></div>
         <div class="row">
           <input id="code" inputmode="numeric" enterkeyhint="done" placeholder="JANを入力してEnter" autocomplete="off">
           <button id="camBtn" class="sub">📷 カメラ</button>
         </div>
-        <div id="pname">コードを入力するか、📷で読み取ってください</div>
+        <div id="contBox" class="contOnly"><div class="muted">このモードで読んだ数</div><div class="big" id="contN">0</div><div id="contLast">📷で読み取るか、コードを入れてEnter（1回＝1個）</div>
+          <div class="two" style="margin-top:8px"><button class="sub" id="contUndo">直前の1個を取消</button><button class="sub" id="contReset">表示を0にする</button></div></div>
+        <div class="normalOnly"><div id="pname">コードを入力するか、📷で読み取ってください</div></div>
         <div id="exist" class="hidden"></div>
-        <label for="qty">数量</label>
-        <div class="qty">
+        <label for="qty" class="normalOnly">数量</label>
+        <div class="qty normalOnly">
           <button class="sub" id="minus" aria-label="1減らす">−</button>
           <input id="qty" type="number" inputmode="numeric" enterkeyhint="done" min="0" value="1">
           <button class="sub" id="plus" aria-label="1増やす">＋</button>
         </div>
-        <div class="two"><button id="cancelBtn" class="sub">やめる</button><button id="regBtn" class="go">登録</button></div>
+        <div class="two normalOnly"><button id="cancelBtn" class="sub">やめる</button><button id="regBtn" class="go">登録</button></div>
       </div>
 
       <div class="card">
@@ -158,6 +172,7 @@ details summary{cursor:pointer;color:#1d5fd6;font-size:14px;margin-top:8px}
   <div id="camview">
     <video id="camvideo" playsinline muted autoplay></video>
     <div id="guide"></div>
+    <div id="camCount" class="contOnly">連続 <b id="camN">0</b> 個<div id="camLast" style="font-size:14px;font-weight:400"></div></div>
     <div id="camtip">枠に入れて赤い線に合わせる（15〜20cm離すとピントが合いやすい）</div>
   </div>
   <div class="cambar">
@@ -217,12 +232,66 @@ async function api(action, params = {}, post = false) {
 }
 
 /* ---------- 未送信（電波がないときは端末に保存して、あとで自動送信） ---------- */
+/* 連続読み込みの読んだ分（3秒ごとにまとめて送る）。送信中のまとまりは同じ番号で送り直すので二重にならない */
+const CB = {
+  list() { try { return JSON.parse(ls.get('tana_cbuf', '[]')); } catch (e) { return []; } },
+  save(a) { ls.set('tana_cbuf', JSON.stringify(a)); renderPending(); },
+  batch() { try { return JSON.parse(ls.get('tana_cbatch', 'null')); } catch (e) { return null; } },
+  setBatch(b) { ls.set('tana_cbatch', JSON.stringify(b)); renderPending(); },
+};
+let cflushing = false;
+async function contFlush() {
+  if (cflushing) return; cflushing = true;
+  try {
+    for (let guard = 0; guard < 20; guard++) {
+      let b = CB.batch();
+      if (!b) {
+        const a = CB.list(); if (!a.length) break;
+        const k = x => x.groupId + '|' + x.location + '|' + x.user, key = k(a[0]);
+        let n = 0; while (n < a.length && n < 300 && k(a[n]) === key) n++;
+        b = { importId: ('c' + uid()).slice(0, 12), groupId: a[0].groupId, location: a[0].location, user: a[0].user, records: a.slice(0, n).map(x => ({ code: x.code, qty: 1 })) };
+        CB.setBatch(b); CB.save(a.slice(n));
+      }
+      try { await api('addMany', b, true); CB.setBatch(null); }
+      catch (e) {
+        if (e instanceof NetError) break;
+        toast('連続読み込みの分を送れませんでした：' + e.message, true); CB.setBatch(null); break;
+      }
+    }
+    if (!CB.list().length && !CB.batch() && S.group) loadHist();
+  } finally { cflushing = false; }
+}
+setInterval(contFlush, 3000);
+addEventListener('online', contFlush);
+const CM = { n: 0, stack: [] };
+function contShow(code) {
+  $('contN').textContent = CM.n; $('camN').textContent = CM.n;
+  if (code !== undefined) { $('contLast').textContent = code ? '最後に読んだコード：' + code : '📷で読み取るか、コードを入れてEnter（1回＝1個）'; $('camLast').textContent = code || ''; }
+}
+function contAdd(code) {
+  code = norm(code); if (!code || !S.group) return;
+  CB.save(CB.list().concat([{ code, groupId: S.group.id, location: S.loc, user: S.user }]));
+  CM.n++; CM.stack.push(code); contShow(code);
+}
+$('contUndo').onclick = () => {
+  const a = CB.list();
+  if (!a.length) return toast('送信済みの分は「自分の登録履歴」から取り消してください', true);
+  const x = a.pop(); CB.save(a); CM.n = Math.max(0, CM.n - 1); contShow(CM.stack.pop() && (CM.stack[CM.stack.length - 1] || '')); toast(`${x.code} を1個取り消しました`);
+};
+$('contReset').onclick = () => { CM.n = 0; CM.stack = []; contShow(''); };
+function setCont(on) {
+  document.body.classList.toggle('cont', on); $('contMode').checked = on; ls.set('tana_cont', on ? '1' : '');
+  $('code').placeholder = on ? 'コードを入れてEnter' : 'JANを入力してEnter';
+  contShow(); resetEntry();
+}
+$('contMode').onchange = e => setCont(e.target.checked);
+
 const Q = {
   list() { try { return JSON.parse(ls.get('tana_queue', '[]')); } catch (e) { return []; } },
   save(a) { ls.set('tana_queue', JSON.stringify(a)); renderPending(); },
   push(x) { const a = this.list(); a.push(x); this.save(a); },
 };
-function renderPending() { const n = Q.list().length; $('pending').textContent = `未送信 ${n}`; $('pending').style.display = n ? 'inline-block' : 'none'; }
+function renderPending() { const n = Q.list().length + CB.list().length + (CB.batch() ? CB.batch().records.length : 0); $('pending').textContent = `未送信 ${n}`; $('pending').style.display = n ? 'inline-block' : 'none'; }
 let flushing = false;
 async function flush() {
   if (flushing) return; flushing = true;
@@ -331,8 +400,8 @@ async function lookup() {
   if (S.existing > 0) { $('exist').textContent = `この場所にすでに ${S.existing} 個登録されています`; $('exist').classList.remove('hidden'); }
   $('qty').focus(); $('qty').select();
 }
-$('code').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); lookup(); } });
-$('code').addEventListener('change', lookup);
+$('code').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (document.body.classList.contains('cont')) { contAdd($('code').value); $('code').value = ''; } else lookup(); } });
+$('code').addEventListener('change', () => { if (!document.body.classList.contains('cont')) lookup(); });
 $('qty').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('regBtn').click(); } });
 $('minus').onclick = () => { $('qty').value = Math.max(0, (+$('qty').value || 0) - 1); };
 $('plus').onclick = () => { $('qty').value = (+$('qty').value || 0) + 1; };
@@ -440,7 +509,7 @@ function beep() {
   } catch (e) {}
 }
 
-const C = { stream: null, track: null, det: null, timer: 0, busy: false, n: 0, last: '', hits: 0, zoom: 1 };
+const C = { lastCont: '', lastAt: 0, stream: null, track: null, det: null, timer: 0, busy: false, n: 0, last: '', hits: 0, zoom: 1 };
 const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
 
 $('camBtn').onclick = openCam;
@@ -574,6 +643,16 @@ async function scanLoop() {
   C.timer = setTimeout(scanLoop, 30);
 }
 function scanned(code) {
+  if (document.body.classList.contains('cont')) {   // 連続モード：カメラを閉じずに1個ずつ数える
+    const now = Date.now();
+    if (code === C.lastCont && now - C.lastAt < 1200) { C.timer = setTimeout(scanLoop, 60); return; }   // 同じバーコードがかざされたままの間は数えない
+    C.lastCont = code; C.lastAt = now;
+    $('guide').classList.add('hit'); beep(); if (navigator.vibrate) navigator.vibrate(50);
+    contAdd(code); C.last = ''; C.hits = 0;
+    setTimeout(() => $('guide').classList.remove('hit'), 180);
+    C.timer = setTimeout(scanLoop, 350);
+    return;
+  }
   $('guide').classList.add('hit');
   beep(); if (navigator.vibrate) navigator.vibrate(80);
   setTimeout(() => { closeCam(); $('code').value = code; lookup(); }, 150);
@@ -686,6 +765,7 @@ else if (S.user && S.group) show('s-loc');
 else if (S.user) show('s-group');
 else show('s-user');
 flush();
+setCont(ls.get('tana_cont') === '1'); contFlush();
 // 保存していた棚卸グループがもう無いとき（データの置き場所を店舗管理に移したときなど）は選び直してもらう
 if (S.group) api('init').then(d => {
   if (!d.groups.some(g => g.id === S.group.id)) { S.group = null; ls.set('tana_group', 'null'); toast('棚卸グループを選び直してください'); show(S.user ? 's-group' : 's-user'); }
