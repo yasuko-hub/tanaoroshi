@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="出荷">
+<meta name="theme-color" content="#111214">
+<meta name="robots" content="noindex">
+<title>スマホで出荷</title>
+<style>
+:root{--bg:#e9eaec;--card:#fff;--ink:#111214;--mute:#5d6168;--line:#d4d6da;--acc:#ff4f00;--ok:#0f6b45;--okbg:#e6f4ec;--ng:#8a4b00;--ngbg:#fff2e0;--red:#c62828}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;overflow-x:clip;-webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:10;background:var(--ink);color:#fff;padding:calc(8px + env(safe-area-inset-top)) max(4vw,12px) 0}
+.hrow{display:flex;align-items:center;gap:10px}
+header h1{margin:0;font-size:17px;flex:1}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.step{font-size:12px;color:var(--mute);font-weight:600}
+h2{font-size:20px;margin:2px 0 12px;line-height:1.25}
+h3{font-size:17px;margin:0}
+label{display:block;font-size:13px;color:var(--mute);margin:12px 0 4px}
+input,select{width:100%;font:inherit;font-size:18px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);min-height:50px}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+button{font:inherit;font-size:17px;font-weight:700;min-height:50px;padding:10px 16px;border:0;border-radius:8px;background:var(--ink);color:#fff;cursor:pointer;width:100%;margin-top:12px}
+button.sub{background:#fff;color:var(--ink);border:1px solid var(--line);font-weight:500}
+button.go{background:var(--acc);font-size:20px;min-height:58px}
+button:disabled{opacity:.45}
+.row{display:flex;gap:8px}.row>input{flex:1}.row>button{flex:none;width:auto;margin:0}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.item .meta{color:var(--mute);font-size:13px}
+.item .q{font-weight:700;font-size:20px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.item button{width:auto;margin:0;min-height:40px;font-size:13px;padding:6px 12px;background:#fff;color:var(--mute);border:1px solid var(--line)}
+.item button.armed{background:var(--red);color:#fff;border-color:var(--red)}
+.tag{display:inline-block;font-size:11px;background:var(--acc);color:#fff;border-radius:4px;padding:0 6px;margin-left:6px;vertical-align:middle}
+.muted{color:var(--mute);font-size:13px;margin:6px 0 0}
+#note{display:none;background:var(--ngbg);color:var(--ng);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:14px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:999px;font-size:15px;display:none;z-index:50;max-width:92%;text-align:center}
+#toast.err{background:var(--red)}
+.hidden{display:none!important}
+/* カメラ */
+#camwrap{position:fixed;inset:0;background:#000;z-index:40;display:flex;flex-direction:column}
+#camview{position:relative;flex:1;overflow:hidden}
+#camvideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+#guide{position:absolute;left:6%;right:6%;top:42%;height:min(46vw,240px);transform:translateY(-50%);border:3px solid #fff;border-radius:12px;box-shadow:0 0 0 100vmax rgba(0,0,0,.42);pointer-events:none;transition:border-color .15s}
+#guide.hit{border-color:#3ddc84}
+#guide::after{content:"";position:absolute;left:3%;right:3%;top:50%;height:3px;margin-top:-1.5px;background:#ff2a2a;box-shadow:0 0 8px #ff2a2a;animation:blink 1.2s ease-in-out infinite}
+@keyframes blink{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){#guide::after{animation:none}}
+#camtip{position:absolute;left:0;right:0;top:calc(42% + min(23vw,120px) + 14px);text-align:center;color:#fff;font-size:15px;text-shadow:0 1px 3px #000;padding:0 16px}
+.cambar{display:flex;gap:8px;padding:12px 12px calc(12px + env(safe-area-inset-bottom));background:#000}
+.cambar button{margin:0;background:#2a2c30;font-size:15px;padding:10px 8px}
+.cambar .sm{width:auto;flex:none;padding:10px 14px}
+
+header{position:sticky;top:0;z-index:10;background:var(--ink);color:#fff;padding:calc(10px + env(safe-area-inset-top)) max(4vw,12px) 10px}
+header h1{margin:0;font-size:17px}
+#pend{display:none;background:var(--acc);color:#fff;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:700;margin-left:8px}
+.qty{display:grid;grid-template-columns:64px minmax(0,1fr) 64px;gap:8px}
+.qty button{margin:0;font-size:26px}.qty input{text-align:center;font-size:28px;font-weight:700}
+#big{text-align:center;padding:4px 0}
+#big .n{font-size:52px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+.res{padding:12px;border-radius:10px;margin-top:10px;font-weight:600;min-height:54px}
+.res.ok{background:var(--okbg);color:var(--ok)}.res.ng{background:var(--ngbg);color:var(--ng)}.res.err{background:#fde8e8;color:var(--red)}
+#camRes{position:absolute;left:12px;right:12px;bottom:12px;padding:12px 14px;border-radius:12px;font-size:17px;font-weight:700;background:rgba(0,0,0,.65);color:#fff;text-align:center;min-height:2.6em}
+#camRes.ok{background:rgba(15,107,69,.92)}#camRes.ng{background:rgba(198,40,40,.92)}
+#camQty{position:absolute;left:0;right:0;top:12px;text-align:center;color:#fff;font-size:18px;font-weight:700;text-shadow:0 1px 4px #000;pointer-events:none}
+.st{font-size:12px;border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap}
+.st.s{background:var(--acc);color:#fff}.st.e{background:var(--red);color:#fff}.st.u{background:var(--line);color:var(--mute)}
+.after{font-size:13px;color:var(--mute)}
+.warn{color:var(--red);font-size:13px;font-weight:700}
+</style>
+</head>
+<body>
+<header><h1>スマホで出荷<span id="pend"></span></h1></header>
+<main>
+  <div id="note"></div>
+  <section id="sKey" class="card hidden">
+    <h2>出荷用のURLから開いてください</h2>
+    <p>このページは、店長からもらった「出荷用のURL」で開くと使えます。</p>
+  </section>
+
+  <section id="sMain" class="hidden">
+    <div class="card">
+      <label for="user" style="margin-top:0">あなたの名前（記録に残ります）</label>
+      <input id="user" maxlength="20" autocomplete="name" placeholder="例：山田">
+      <label>1回読むと減らす数</label>
+      <div class="qty"><button class="sub" id="qm" aria-label="1つ減らす">−</button><input id="qty" inputmode="numeric" value="1" aria-label="1回読むと減らす数"><button class="sub" id="qp" aria-label="1つ増やす">＋</button></div>
+      <button class="go" id="camBtn">📷 カメラでJANを読む</button>
+      <p class="muted">カメラを商品のJANにかざすと、そのたびにSquareの在庫が減ります。同じ商品をもう1個出すときは、一度バーコードを枠の外に出してから、もう一度かざしてください。</p>
+      <details><summary>カメラで読めないとき（JANを手で入れる）</summary>
+        <div class="row" style="margin-top:8px"><input id="code" inputmode="numeric" autocomplete="off" placeholder="JANを入れる" aria-label="JAN"><button id="codeGo">出荷</button></div>
+      </details>
+      <div id="lastRes" class="res hidden" aria-live="polite"></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><h3>この端末の出荷（今日）</h3><span class="muted" id="sum" style="margin:0"></span></div>
+      <div id="hist"></div>
+    </div>
+  </section>
+</main>
+
+<div id="camwrap" class="hidden">
+  <div id="camview">
+    <video id="camvideo" playsinline muted autoplay></video>
+    <div id="guide"></div>
+    <div id="camQty"></div>
+    <div id="camtip">枠に入れて赤い線に合わせる（15〜20cm離すとピントが合いやすい）</div>
+    <div id="camRes" aria-live="polite">JANにかざすと、在庫を減らします</div>
+  </div>
+  <div class="cambar">
+    <button id="switchBtn" class="sm hidden">🔄 切替</button>
+    <button id="zoomBtn" class="sm hidden">🔍 2倍</button>
+    <button id="torchBtn" class="sm hidden">💡 ライト</button>
+    <button id="photoBtn">📸 写真で読む</button>
+    <button id="camClose" class="sm">閉じる</button>
+  </div>
+  <input id="camfile" type="file" accept="image/*" capture="environment" class="hidden">
+</div>
+<div id="toast"></div>
+
+<script>
+{
+const API_URL = 'https://script.google.com/macros/s/AKfycbz8qAcosoBKX4r-3ssqD4Go4tRHmWj9JqSi4kdaLiWqCjhUrVAityhmOCGF8u8oCzD6/exec';
+const $ = id => document.getElementById(id);
+const ls = { get: (k, d = '') => { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } },
+             set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const norm = v => String(v ?? '').replace(/[０-９Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\s+/g, '');
+const pad = n => String(n).padStart(2, '0');
+const hm = t => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+function toast(m, err) { const t = $('toast'); t.textContent = m; t.className = err ? 'err' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', err ? 4500 : 2200); }
+function note(m) { $('note').textContent = m || ''; $('note').style.display = m ? 'block' : 'none'; }
+
+class NetError extends Error {}
+async function api(action, params = {}, post = false) {
+  let res;
+  try {
+    if (post) res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action, ...params }) });
+    else { const u = new URL(API_URL); u.searchParams.set('action', action); for (const k in params) u.searchParams.set(k, params[k]); res = await fetch(u); }
+  } catch (e) { throw new NetError('通信できません'); }
+  let j; try { j = await res.json(); } catch (e) { throw new NetError('サーバーの応答が読めません'); }
+  if (!j.ok) throw new Error(j.error || 'エラー');
+  return j.data;
+}
+
+/* ---------- 出荷キー（URLの ?k=） ---------- */
+const qk = new URLSearchParams(location.search).get('k');
+if (qk) { ls.set('ship_k', qk); history.replaceState(null, '', location.pathname); }   // URLからは消して、端末に覚える
+const KEY = ls.get('ship_k');
+
+/* ---------- 記録（この端末・今日の分） ----------
+   r: { id, code, qty, at, st: 'wait'|'done'|'none'|'err', name, before, after, undone, msg } */
+let H = [];
+try { const x = JSON.parse(ls.get('ship_hist', '{}')); H = x.day === today() ? x.list : []; } catch (e) {}
+const saveH = () => ls.set('ship_hist', JSON.stringify({ day: today(), list: H.slice(0, 300) }));
+function renderH() {
+  const done = H.filter(r => r.st === 'done' && !r.undone);
+  $('sum').textContent = `${done.length}回・${done.reduce((s, r) => s + r.qty, 0)}個`;
+  const w = H.filter(r => r.st === 'wait').length;
+  $('pend').textContent = `送信待ち ${w}`; $('pend').style.display = w ? 'inline-block' : 'none';
+  $('hist').innerHTML = H.length ? H.map(r => {
+    const tag = r.st === 'wait' ? '<span class="st s">送信待ち</span>' : r.st === 'none' ? '<span class="st e">未登録</span>' : r.st === 'err' ? '<span class="st e">エラー</span>' : r.undone ? '<span class="st u">取消済み</span>' : '';
+    const sub = r.st === 'done' && r.undone ? `取消しました（在庫を${r.backTo === '' ? '' : r.backTo + 'に'}戻しました）` : r.st === 'done' ? `在庫 ${r.before === '' ? '?' : r.before} → <b>${r.after === '' ? '?' : r.after}</b>${Number(r.after) < 0 ? ' <span class="warn">マイナスです（棚卸が必要かも）</span>' : ''}` : r.msg ? esc(r.msg) : '';
+    const btn = r.st === 'done' && !r.undone ? `<button data-undo="${esc(r.id)}">取消</button>` : r.st === 'err' ? `<button data-retry="${esc(r.id)}">もう一度</button>` : '';
+    return `<div class="item"><div><div>${esc(r.name || r.code)}${tag}</div><div class="meta">${esc(r.code)}｜${hm(r.at)}${r.st === 'done' ? '' : ''}</div><div class="after">${sub}</div></div>
+      <div class="row" style="align-items:center"><span class="q">−${r.qty}</span>${btn}</div></div>`;
+  }).join('') : '<p class="muted">まだありません</p>';
+}
+
+/* ---------- 出荷（読んだら順番に送る。電波がないときは送信待ちにして、あとで送る） ---------- */
+function shipCode(code) {
+  code = norm(code); if (!code) return;
+  const qty = Math.max(1, Math.min(999, parseInt($('qty').value, 10) || 1));
+  const r = { id: uid(), code, qty, at: Date.now(), st: 'wait' };
+  H.unshift(r); saveH(); renderH();
+  camMsg(`読みました：${code}（送信中…）`, '');
+  pump();
+}
+let pumping = false;
+async function pump() {
+  if (pumping) return; pumping = true;
+  try {
+    for (;;) {
+      const r = H.slice().reverse().find(x => x.st === 'wait'); if (!r) break;
+      try {
+        const d = await api('ship', { k: KEY, code: r.code, qty: r.qty, user: $('user').value.trim(), clientId: r.id }, true);
+        if (d.found === false) { r.st = 'none'; r.msg = 'Squareに登録がないJANです。在庫は変えていません'; show(r, `✗ 未登録のJAN：${r.code}`, 'ng'); }
+        else { Object.assign(r, { st: 'done', name: d.name, before: d.before, after: d.after }); show(r, `✓ ${d.name}　在庫 ${d.before === '' ? '?' : d.before} → ${d.after === '' ? '?' : d.after}`, Number(d.after) < 0 ? 'ng' : 'ok'); }
+      } catch (e) {
+        if (e instanceof NetError) { camMsg('電波が弱いようです。送信待ちにして、つながったら送ります', 'ng'); setTimeout(pump, 5000); break; }
+        r.st = 'err'; r.msg = e.message; show(r, '✗ ' + e.message, 'ng');
+        if (/URL/.test(e.message)) { note(e.message); break; }
+      }
+      saveH(); renderH();
+    }
+  } finally { pumping = false; renderH(); }
+}
+function camMsg(t, cls) { const el = $('camRes'); el.textContent = t; el.className = cls || ''; }
+function show(r, t, cls) {
+  camMsg(t, cls);
+  const el = $('lastRes'); el.textContent = t; el.className = 'res ' + (cls === 'ok' ? 'ok' : cls === 'ng' ? 'ng' : ''); el.classList.remove('hidden');
+  if (cls === 'ng') { try { if (navigator.vibrate) navigator.vibrate([80, 60, 80]); } catch (e) {} }
+}
+$('hist').addEventListener('click', async e => {
+  const u = e.target.closest('[data-undo]'), t = e.target.closest('[data-retry]');
+  if (t) { const r = H.find(x => x.id === t.dataset.retry); if (r) { r.st = 'wait'; r.msg = ''; saveH(); renderH(); pump(); } return; }
+  if (!u) return;
+  if (!u.classList.contains('armed')) { u.classList.add('armed'); u.textContent = '取消する'; setTimeout(() => { u.classList.remove('armed'); u.textContent = '取消'; }, 3000); return; }
+  u.disabled = true;
+  const r = H.find(x => x.id === u.dataset.undo);
+  try { const d = await api('shipUndo', { k: KEY, id: r.id }, true); r.undone = true; r.backTo = d && d.after !== undefined ? d.after : ''; saveH(); renderH(); toast('取り消しました（在庫を戻しました）'); }
+  catch (err) { toast(err.message, true); u.disabled = false; }
+});
+$('codeGo').onclick = () => { const c = $('code').value; if (!norm(c)) return; shipCode(c); $('code').value = ''; $('code').focus(); };
+$('code').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('codeGo').click(); } });
+const setQty = v => { $('qty').value = Math.max(1, Math.min(999, v)); ls.set('ship_qty', $('qty').value); camQty(); };
+$('qm').onclick = () => setQty((parseInt($('qty').value, 10) || 1) - 1);
+$('qp').onclick = () => setQty((parseInt($('qty').value, 10) || 1) + 1);
+$('qty').onchange = () => setQty(parseInt($('qty').value, 10) || 1);
+function camQty() { const q = parseInt($('qty').value, 10) || 1; $('camQty').textContent = q > 1 ? `1回で ${q}個 減らします` : ''; }
+$('user').value = ls.get('ship_user'); $('user').onchange = () => ls.set('ship_user', $('user').value.trim());
+
+/* ---------- カメラ（かざすだけで読み取り） ----------
+   読み取りエンジン：AndroidのChromeは端末内蔵の読み取り機能、
+   iPhoneなどは高精度な ZXing（zxing-cpp）を使います。
+   枠の中だけを切り出して読むので、小さいバーコードでも読み取りやすくしています。 */
+const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'];
+let detectorP = null;
+function getDetector() {
+  if (detectorP) return detectorP;
+  detectorP = (async () => {
+    try {
+      if ('BarcodeDetector' in window) {
+        const sup = await window.BarcodeDetector.getSupportedFormats();
+        if (sup.includes('ean_13')) return new window.BarcodeDetector({ formats: FORMATS.filter(f => sup.includes(f)) });
+      }
+    } catch (e) {}
+    const m = await import('https://cdn.jsdelivr.net/npm/barcode-detector@3.2.2/dist/es/ponyfill.js/+esm');
+    return new m.BarcodeDetector({ formats: FORMATS });
+  })();
+  detectorP.catch(() => { detectorP = null; });
+  return detectorP;
+}
+// 起動を速くするため、ページを開いたら読み取りエンジンを先に準備しておく
+setTimeout(async () => {
+  try { const d = await getDetector(); const c = document.createElement('canvas'); c.width = c.height = 8; await d.detect(c); } catch (e) {}
+}, 1500);
+
+function validEan(c) {
+  if (!/^\d+$/.test(c) || ![8, 12, 13].includes(c.length)) return null;   // EAN/UPC以外
+  const d = c.split('').map(Number), chk = d.pop();
+  const sum = d.reverse().reduce((s, n, i) => s + n * (i % 2 === 0 ? 3 : 1), 0);
+  return (10 - sum % 10) % 10 === chk;                                      // チェック数字で読み間違いを防ぐ
+}
+let audioCtx = null;
+function beep() {
+  try {
+    if (!audioCtx) return;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.frequency.value = 1500; g.gain.value = 0.15; o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + 0.12);
+  } catch (e) {}
+}
+
+const C = { lastCont: '', lastAt: 0, stream: null, track: null, det: null, timer: 0, busy: false, n: 0, last: '', hits: 0, zoom: 1 };
+const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+
+$('camBtn').onclick = openCam;
+const TIP = '枠に入れて赤い線に合わせる（15〜20cm離すとピントが合いやすい）';
+async function startStream(deviceId) {
+  if (C.stream) C.stream.getTracks().forEach(t => t.stop());
+  const video = deviceId ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+                         : { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } };
+  C.stream = await navigator.mediaDevices.getUserMedia({ audio: false, video });
+  C.track = C.stream.getVideoTracks()[0];
+  const v = $('camvideo'); v.srcObject = C.stream; await v.play();
+  try { await C.track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch (e) {}
+  setupCamButtons();
+}
+// 背面カメラの一覧（iPhoneは近くにピントが合う「トリプル／デュアル広角」を優先）
+async function backCameras() {
+  try {
+    const all = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    const back = all.filter(d => /back|rear|environment|背面|後/i.test(d.label));
+    return back.length ? back : all;
+  } catch (e) { return []; }
+}
+async function openCam() {
+  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (e) {}
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('この画面ではカメラが使えません。SafariかChromeで開いてください', true);
+  $('camwrap').classList.remove('hidden');
+  $('camtip').textContent = 'カメラを起動中…';
+  const detP = getDetector();
+  try {
+    const saved = ls.get('tana_cam');
+    await startStream(saved || null).catch(() => startStream(null));
+    C.cams = await backCameras();
+    if (!saved && /iPhone|iPad/.test(navigator.userAgent)) {
+      const pref = C.cams.find(d => /triple|トリプル/i.test(d.label)) || C.cams.find(d => /dual wide|デュアル広角/i.test(d.label));
+      if (pref && pref.deviceId !== (C.track.getSettings() || {}).deviceId) await startStream(pref.deviceId).catch(() => {});
+    }
+    $('switchBtn').classList.toggle('hidden', C.cams.length < 2);
+  } catch (e) {
+    closeCam();
+    return toast('カメラを起動できません。SafariかChromeで開き、カメラの使用を許可してください', true);
+  }
+  try { C.det = await detP; }
+  catch (e) { $('camtip').textContent = '読み取りエンジンを読み込めません（通信を確認）。「写真で読む」か手入力をお使いください'; return; }
+  $('camtip').textContent = TIP;
+  C.n = 0; C.last = ''; C.hits = 0;
+  scanLoop();
+}
+$('switchBtn').onclick = async () => {
+  if (!C.cams || C.cams.length < 2) return;
+  const cur = (C.track.getSettings() || {}).deviceId;
+  const i = C.cams.findIndex(d => d.deviceId === cur);
+  const next = C.cams[(i + 1) % C.cams.length];
+  try { await startStream(next.deviceId); ls.set('tana_cam', next.deviceId); toast(next.label || 'カメラを切り替えました'); } catch (e) { toast('切り替えできませんでした', true); }
+};
+function setupCamButtons() {
+  $('torchBtn').classList.add('hidden'); $('zoomBtn').classList.add('hidden');
+  let caps = {};
+  try { caps = C.track.getCapabilities ? C.track.getCapabilities() : {}; } catch (e) {}
+  if (caps.torch) {
+    let on = false;
+    $('torchBtn').classList.remove('hidden');
+    $('torchBtn').onclick = async () => { on = !on; try { await C.track.applyConstraints({ advanced: [{ torch: on }] }); } catch (e) {} };
+  }
+  if (caps.zoom && caps.zoom.max >= 2) {
+    C.zoom = 1;
+    $('zoomBtn').classList.remove('hidden'); $('zoomBtn').textContent = '🔍 2倍';
+    $('zoomBtn').onclick = async () => {
+      C.zoom = C.zoom === 1 ? 2 : 1;
+      try { await C.track.applyConstraints({ advanced: [{ zoom: C.zoom }] }); } catch (e) {}
+      $('zoomBtn').textContent = C.zoom === 1 ? '🔍 2倍' : '🔍 1倍';
+    };
+  }
+}
+// 画面上の枠が、カメラ映像のどこに当たるかを計算（上下に少し余裕を持たせる）
+function guideRect(v) {
+  const box = $('camview').getBoundingClientRect(), g = $('guide').getBoundingClientRect();
+  const vw = v.videoWidth, vh = v.videoHeight;
+  const s = Math.max(box.width / vw, box.height / vh);
+  const ox = (box.width - vw * s) / 2, oy = (box.height - vh * s) / 2;
+  let x = (g.left - box.left - ox) / s, y = (g.top - box.top - oy) / s, w = g.width / s, h = g.height / s;
+  x -= w * 0.04; w *= 1.08; y -= h * 0.35; h *= 1.7;
+  x = Math.max(0, x); y = Math.max(0, y);
+  return { x, y, w: Math.min(vw - x, w), h: Math.min(vh - y, h) };
+}
+// 横方向にシャープ化（ピントが少し甘いバーコードも読めるようにする）
+function sharpen(amt) {
+  const W = cv.width, H = cv.height, id = cx.getImageData(0, 0, W, H), s = id.data, g = new Float32Array(W), R = 2;
+  for (let y = 0; y < H; y++) {
+    const r = y * W * 4;
+    for (let x = 0; x < W; x++) { const i = r + x * 4; g[x] = 0.299 * s[i] + 0.587 * s[i + 1] + 0.114 * s[i + 2]; }
+    let sum = 0, n = 0;
+    for (let x = 0; x <= R && x < W; x++) { sum += g[x]; n++; }
+    for (let x = 0; x < W; x++) {
+      const v = g[x] + amt * (g[x] - sum / n), i = r + x * 4;
+      s[i] = s[i + 1] = s[i + 2] = v;
+      if (x + R + 1 < W) { sum += g[x + R + 1]; n++; }
+      if (x - R >= 0) { sum -= g[x - R]; n--; }
+    }
+  }
+  cx.putImageData(id, 0, 0);
+}
+async function scanLoop() {
+  if (!C.stream || !C.det) return;
+  const v = $('camvideo');
+  if (v.readyState >= 2 && v.videoWidth && !C.busy) {
+    C.busy = true;
+    try {
+      // 1コマごとに読み方を変える：そのまま → 弱いシャープ → 強いシャープ → 画面全体
+      const mode = C.n++ % 4;
+      const full = mode === 3;
+      const r = full ? { x: 0, y: 0, w: v.videoWidth, h: v.videoHeight } : guideRect(v);
+      const k = Math.min(1, (full ? 1280 : 1400) / r.w);
+      cv.width = Math.max(1, Math.round(r.w * k)); cv.height = Math.max(1, Math.round(r.h * k));
+      cx.drawImage(v, r.x, r.y, r.w, r.h, 0, 0, cv.width, cv.height);
+      if (mode === 1) sharpen(1.5); else if (mode === 2) sharpen(3);
+      const res = await C.det.detect(cv);
+      for (const b of res) {
+        const c = norm(b.rawValue);
+        const ok = validEan(c);
+        if (ok === false) continue;                     // チェック数字が合わない＝読み間違い
+        if (ok === null) {                              // EAN以外は同じ値を2回読めたら確定
+          C.hits = c === C.last ? C.hits + 1 : 1; C.last = c;
+          if (C.hits < 2) continue;
+        }
+        C.busy = false;
+        return scanned(c);
+      }
+    } catch (e) {}
+    C.busy = false;
+  }
+  C.timer = setTimeout(scanLoop, 30);
+}
+function scanned(code) {
+  const now = Date.now();
+  if (code === C.lastCont && now - C.lastAt < 1500) { C.lastAt = now; C.timer = setTimeout(scanLoop, 60); return; }   // 同じバーコードがかざされたままの間は数えない（離すと次を数える）
+  C.lastCont = code; C.lastAt = now;
+  $('guide').classList.add('hit'); beep(); if (navigator.vibrate) navigator.vibrate(60);
+  shipCode(code); C.last = ''; C.hits = 0;
+  setTimeout(() => $('guide').classList.remove('hit'), 200);
+  C.timer = setTimeout(scanLoop, 400);
+}
+function closeCam() {
+  clearTimeout(C.timer);
+  $('camwrap').classList.add('hidden'); $('guide').classList.remove('hit');
+  $('torchBtn').classList.add('hidden'); $('zoomBtn').classList.add('hidden'); $('switchBtn').classList.add('hidden');
+  if (C.stream) C.stream.getTracks().forEach(t => t.stop());
+  C.stream = null; C.track = null; C.det = null;
+  const v = $('camvideo'); v.srcObject = null;
+}
+$('camClose').onclick = () => { closeCam(); };
+
+// 予備：写真を撮って読み取る（かざして読めないとき）
+$('photoBtn').onclick = () => { $('camfile').value = ''; $('camfile').click(); };
+$('camfile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('camtip').textContent = '写真を読み取り中…';
+  try {
+    const det = await getDetector();
+    const bmp = await createImageBitmap(f);
+    let found = '';
+    for (const max of [1600, 2400, 1000]) {             // 大きさを変えて何度か試す
+      const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+      cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+      cx.drawImage(bmp, 0, 0, cv.width, cv.height);
+      for (const amt of [0, 2]) {
+        if (amt) { cx.drawImage(bmp, 0, 0, cv.width, cv.height); sharpen(amt); }
+        const res = await det.detect(cv);
+        const hit = res.map(b => norm(b.rawValue)).find(c => validEan(c) !== false);
+        if (hit) { found = hit; break; }
+      }
+      if (found) break;
+    }
+    if (found) return scanned(found);
+    $('camtip').textContent = '写真から読み取れませんでした。バーコードを大きく、まっすぐ撮ってください';
+  } catch (err) { $('camtip').textContent = '読み取りに失敗しました。手入力をお使いください'; }
+});
+
+
+
+/* ---------- はじめ ---------- */
+(async () => {
+  if (!KEY) { $('sKey').classList.remove('hidden'); return; }
+  $('sMain').classList.remove('hidden'); renderH(); camQty();
+  try { await api('shipInit', { k: KEY }); }
+  catch (e) { if (e instanceof NetError) note('いま通信できません。読んだ分は送信待ちにして、つながったら送ります'); else { note(e.message); $('camBtn').disabled = true; } }
+  if (H.some(x => x.st === 'wait')) pump();
+})();
+window.addEventListener('online', pump);
+}
+</script>
+</body>
+</html>
