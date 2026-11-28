@@ -63,6 +63,11 @@ header h1{margin:0;font-size:17px}
 .res.ok{background:var(--okbg);color:var(--ok)}.res.ng{background:var(--ngbg);color:var(--ng)}.res.err{background:#fde8e8;color:var(--red)}
 #camRes{position:absolute;left:12px;right:12px;bottom:12px;padding:12px 14px;border-radius:12px;font-size:17px;font-weight:700;background:rgba(0,0,0,.65);color:#fff;text-align:center;min-height:2.6em}
 #camRes.ok{background:rgba(15,107,69,.92)}#camRes.ng{background:rgba(198,40,40,.92)}
+#dlg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:45;display:flex;align-items:center;justify-content:center;padding:16px}
+#dlg .card{max-width:440px;width:100%;margin:0}
+.qbox{display:flex;align-items:center;gap:4px}.qbox button{width:40px;min-height:40px;margin:0;padding:0;font-size:20px;background:#fff;color:var(--ink);border:1px solid var(--line)}.qbox b{min-width:2.2em;text-align:center;font-size:20px;font-variant-numeric:tabular-nums}
+.item .q{flex:none}.qbox{flex:none}.qbox button{white-space:nowrap}
+#camCart{position:absolute;right:12px;top:12px;background:rgba(0,0,0,.6);color:#fff;border-radius:999px;padding:6px 12px;font-weight:700;font-size:15px}
 #camQty{position:absolute;left:0;right:0;top:12px;text-align:center;color:#fff;font-size:18px;font-weight:700;text-shadow:0 1px 4px #000;pointer-events:none}
 .st{font-size:12px;border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap}
 .st.s{background:var(--acc);color:#fff}.st.e{background:var(--red);color:#fff}.st.u{background:var(--line);color:var(--mute)}
@@ -83,18 +88,22 @@ header h1{margin:0;font-size:17px}
     <div class="card">
       <label for="user" style="margin-top:0">あなたの名前（記録に残ります）</label>
       <input id="user" maxlength="20" autocomplete="name" placeholder="例：山田">
-      <label>1回読むと減らす数</label>
-      <div class="qty"><button class="sub" id="qm" aria-label="1つ減らす">−</button><input id="qty" inputmode="numeric" value="1" aria-label="1回読むと減らす数"><button class="sub" id="qp" aria-label="1つ増やす">＋</button></div>
       <button class="go" id="camBtn">📷 カメラでJANを読む</button>
-      <p class="muted">カメラを商品のJANにかざすと、そのたびにSquareの在庫が減ります。同じ商品をもう1個出すときは、一度バーコードを枠の外に出してから、もう一度かざしてください。</p>
+      <p class="muted">読んだ商品は下の「出荷する商品」にたまります（この時点では在庫は変わりません）。全部読んだら「Squareに送信」を押すと、まとめて在庫が減ります。同じ商品をもう1個読むときは、一度バーコードを枠の外に出してから、もう一度かざしてください。</p>
       <details><summary>カメラで読めないとき（JANを手で入れる）</summary>
-        <div class="row" style="margin-top:8px"><input id="code" inputmode="numeric" autocomplete="off" placeholder="JANを入れる" aria-label="JAN"><button id="codeGo">出荷</button></div>
+        <div class="row" style="margin-top:8px"><input id="code" inputmode="numeric" autocomplete="off" placeholder="JANを入れる" aria-label="JAN"><button id="codeGo">追加</button></div>
       </details>
-      <div id="lastRes" class="res hidden" aria-live="polite"></div>
     </div>
 
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><h3>この端末の出荷（今日）</h3><span class="muted" id="sum" style="margin:0"></span></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><h3>出荷する商品（まだ送っていません）</h3><span class="muted" id="cartSum" style="margin:0"></span></div>
+      <div id="cart"></div>
+      <button class="go" id="sendBtn" disabled>Squareに送信</button>
+      <button class="sub hidden" id="clearBtn">ぜんぶ消す</button>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><h3>送信済み（今日・この端末）</h3><span class="muted" id="sum" style="margin:0"></span></div>
       <div id="hist"></div>
     </div>
   </section>
@@ -104,9 +113,9 @@ header h1{margin:0;font-size:17px}
   <div id="camview">
     <video id="camvideo" playsinline muted autoplay></video>
     <div id="guide"></div>
-    <div id="camQty"></div>
+    <div id="camCart">カゴ 0個</div>
     <div id="camtip">枠に入れて赤い線に合わせる（15〜20cm離すとピントが合いやすい）</div>
-    <div id="camRes" aria-live="polite">JANにかざすと、在庫を減らします</div>
+    <div id="camRes" aria-live="polite">JANにかざすと、出荷する商品に入ります</div>
   </div>
   <div class="cambar">
     <button id="switchBtn" class="sm hidden">🔄 切替</button>
@@ -116,6 +125,15 @@ header h1{margin:0;font-size:17px}
     <button id="camClose" class="sm">閉じる</button>
   </div>
   <input id="camfile" type="file" accept="image/*" capture="environment" class="hidden">
+</div>
+<div id="dlg" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dlgT">
+  <div class="card">
+    <h2 id="dlgT">Squareに送信します</h2>
+    <p id="dlgText" style="margin:0 0 8px"></p>
+    <div id="dlgList" style="max-height:40vh;overflow:auto"></div>
+    <button id="dlgGo" class="go">送信する（在庫を減らす）</button>
+    <button id="dlgNo" class="sub">やめる</button>
+  </div>
 </div>
 <div id="toast"></div>
 
@@ -151,63 +169,104 @@ const qk = new URLSearchParams(location.search).get('k');
 if (qk) { ls.set('ship_k', qk); history.replaceState(null, '', location.pathname); }   // URLからは消して、端末に覚える
 const KEY = ls.get('ship_k');
 
-/* ---------- 記録（この端末・今日の分） ----------
-   r: { id, code, qty, at, st: 'wait'|'done'|'none'|'err', name, before, after, undone, msg } */
-let H = [];
-try { const x = JSON.parse(ls.get('ship_hist', '{}')); H = x.day === today() ? x.list : []; } catch (e) {}
-const saveH = () => ls.set('ship_hist', JSON.stringify({ day: today(), list: H.slice(0, 300) }));
+/* ---------- 出荷する商品（カゴ）と送信済み ----------
+   カゴ C: [{ code, qty, name, varId, stock, st: 'look'|'ok'|'none' }]   送信済み H: [{ id, code, name, qty, before, after, at, undone }] */
+let CART = [], H = [];
+try { CART = JSON.parse(ls.get('ship_cart', '[]')); } catch (e) {}
+try { const x = JSON.parse(ls.get('ship_hist2', '{}')); H = x.day === today() ? x.list : []; } catch (e) {}
+const saveC = () => ls.set('ship_cart', JSON.stringify(CART));
+const saveH = () => ls.set('ship_hist2', JSON.stringify({ day: today(), list: H.slice(0, 300) }));
+const cartN = () => CART.filter(c => c.st !== 'none').reduce((s, c) => s + c.qty, 0);
+function renderC() {
+  const ok = CART.filter(c => c.st !== 'none'), n = cartN();
+  $('cartSum').textContent = `${ok.length}商品・${n}個`;
+  $('camCart').textContent = `カゴ ${n}個`;
+  $('sendBtn').disabled = !ok.length || sending; $('sendBtn').textContent = ok.length ? `Squareに送信（${ok.length}商品・${n}個）` : 'Squareに送信';
+  $('clearBtn').classList.toggle('hidden', !CART.length);
+  $('pend').textContent = `未送信 ${n}`; $('pend').style.display = n ? 'inline-block' : 'none';
+  $('cart').innerHTML = CART.length ? CART.map((c, i) => {
+    const name = c.st === 'look' ? '<span class="muted" style="margin:0">商品を確認中…</span>' : c.st === 'none' ? `<span class="warn">Squareに未登録のJAN（送信しません）</span>` : esc(c.name);
+    const stock = c.st === 'ok' && c.stock !== '' && c.stock != null ? `いまの在庫 ${c.stock}${c.qty > c.stock ? ' <span class="warn">在庫より多い</span>' : ''}` : '';
+    return `<div class="item"><div style="min-width:0"><div>${name}</div><div class="meta">${esc(c.code)}${stock ? '｜' + stock : ''}</div></div>
+      <div class="qbox">${c.st === 'none' ? '' : `<button data-m="${i}" aria-label="1つ減らす">−</button><b>${c.qty}</b><button data-p="${i}" aria-label="1つ増やす">＋</button>`}<button data-d="${i}" aria-label="消す" style="width:auto;padding:0 10px;font-size:13px">消す</button></div></div>`;
+  }).join('') : '<p class="muted">カメラでJANを読むと、ここにたまります</p>';
+}
 function renderH() {
-  const done = H.filter(r => r.st === 'done' && !r.undone);
-  $('sum').textContent = `${done.length}回・${done.reduce((s, r) => s + r.qty, 0)}個`;
-  const w = H.filter(r => r.st === 'wait').length;
-  $('pend').textContent = `送信待ち ${w}`; $('pend').style.display = w ? 'inline-block' : 'none';
-  $('hist').innerHTML = H.length ? H.map(r => {
-    const tag = r.st === 'wait' ? '<span class="st s">送信待ち</span>' : r.st === 'none' ? '<span class="st e">未登録</span>' : r.st === 'err' ? '<span class="st e">エラー</span>' : r.undone ? '<span class="st u">取消済み</span>' : '';
-    const sub = r.st === 'done' && r.undone ? `取消しました（在庫を${r.backTo === '' ? '' : r.backTo + 'に'}戻しました）` : r.st === 'done' ? `在庫 ${r.before === '' ? '?' : r.before} → <b>${r.after === '' ? '?' : r.after}</b>${Number(r.after) < 0 ? ' <span class="warn">マイナスです（棚卸が必要かも）</span>' : ''}` : r.msg ? esc(r.msg) : '';
-    const btn = r.st === 'done' && !r.undone ? `<button data-undo="${esc(r.id)}">取消</button>` : r.st === 'err' ? `<button data-retry="${esc(r.id)}">もう一度</button>` : '';
-    return `<div class="item"><div><div>${esc(r.name || r.code)}${tag}</div><div class="meta">${esc(r.code)}｜${hm(r.at)}${r.st === 'done' ? '' : ''}</div><div class="after">${sub}</div></div>
-      <div class="row" style="align-items:center"><span class="q">−${r.qty}</span>${btn}</div></div>`;
-  }).join('') : '<p class="muted">まだありません</p>';
+  const ok = H.filter(r => !r.undone);
+  $('sum').textContent = `${ok.length}商品・${ok.reduce((s, r) => s + r.qty, 0)}個`;
+  $('hist').innerHTML = H.length ? H.map(r => `<div class="item"><div style="min-width:0"><div>${esc(r.name)}${r.undone ? '<span class="st u">取消済み</span>' : ''}</div>
+      <div class="meta">${esc(r.code)}｜${hm(r.at)}</div><div class="after">${r.undone ? `取消しました（在庫を${r.backTo === '' || r.backTo == null ? '' : r.backTo + 'に'}戻しました）` : `在庫 ${r.before === '' ? '?' : r.before} → <b>${r.after === '' ? '?' : r.after}</b>${Number(r.after) < 0 ? ' <span class="warn">マイナスです（棚卸が必要かも）</span>' : ''}`}</div></div>
+      <div class="row" style="align-items:center"><span class="q">−${r.qty}</span>${r.undone ? '' : `<button data-undo="${esc(r.id)}">取消</button>`}</div></div>`).join('') : '<p class="muted">まだありません</p>';
 }
 
-/* ---------- 出荷（読んだら順番に送る。電波がないときは送信待ちにして、あとで送る） ---------- */
+/* 読んだら：カゴに入れる（同じJANなら個数を足す）。商品名は裏で確認する */
 function shipCode(code) {
   code = norm(code); if (!code) return;
-  const qty = Math.max(1, Math.min(999, parseInt($('qty').value, 10) || 1));
-  const r = { id: uid(), code, qty, at: Date.now(), st: 'wait' };
-  H.unshift(r); saveH(); renderH();
-  camMsg(`読みました：${code}（送信中…）`, '');
-  pump();
+  let c = CART.find(x => x.code === code);
+  if (c) { c.qty++; }
+  else { c = { code, qty: 1, st: 'look' }; CART.unshift(c); }
+  saveC(); renderC();
+  camMsg(c.st === 'ok' ? `＋1　${c.name}（${c.qty}個）` : c.st === 'none' ? `✗ 未登録のJAN：${code}` : `読みました：${code}`, c.st === 'none' ? 'ng' : c.st === 'ok' ? 'ok' : '');
+  if (c.st === 'look') lookup(c);
 }
-let pumping = false;
-async function pump() {
-  if (pumping) return; pumping = true;
+async function lookup(c) {
   try {
-    for (;;) {
-      const r = H.slice().reverse().find(x => x.st === 'wait'); if (!r) break;
-      try {
-        const d = await api('ship', { k: KEY, code: r.code, qty: r.qty, user: $('user').value.trim(), clientId: r.id }, true);
-        if (d.found === false) { r.st = 'none'; r.msg = 'Squareに登録がないJANです。在庫は変えていません'; show(r, `✗ 未登録のJAN：${r.code}`, 'ng'); }
-        else { Object.assign(r, { st: 'done', name: d.name, before: d.before, after: d.after }); show(r, `✓ ${d.name}　在庫 ${d.before === '' ? '?' : d.before} → ${d.after === '' ? '?' : d.after}`, Number(d.after) < 0 ? 'ng' : 'ok'); }
-      } catch (e) {
-        if (e instanceof NetError) { camMsg('電波が弱いようです。送信待ちにして、つながったら送ります', 'ng'); setTimeout(pump, 5000); break; }
-        r.st = 'err'; r.msg = e.message; show(r, '✗ ' + e.message, 'ng');
-        if (/URL/.test(e.message)) { note(e.message); break; }
-      }
-      saveH(); renderH();
-    }
-  } finally { pumping = false; renderH(); }
+    const d = await api('shipLookup', { k: KEY, code: c.code });
+    if (d.found) Object.assign(c, { st: 'ok', name: d.name, stock: d.qty }); else c.st = 'none';
+    if (CART.includes(c)) camMsg(c.st === 'ok' ? `＋1　${c.name}（${c.qty}個）` : `✗ 未登録のJAN：${c.code}`, c.st === 'ok' ? 'ok' : 'ng');
+    if (c.st === 'none') { try { if (navigator.vibrate) navigator.vibrate([80, 60, 80]); } catch (e) {} }
+  } catch (e) { if (!(e instanceof NetError)) { note(e.message); } }   // 電波がないときは「確認中」のまま。送信のときにもう一度確認する
+  saveC(); renderC();
 }
 function camMsg(t, cls) { const el = $('camRes'); el.textContent = t; el.className = cls || ''; }
-function show(r, t, cls) {
-  camMsg(t, cls);
-  const el = $('lastRes'); el.textContent = t; el.className = 'res ' + (cls === 'ok' ? 'ok' : cls === 'ng' ? 'ng' : ''); el.classList.remove('hidden');
-  if (cls === 'ng') { try { if (navigator.vibrate) navigator.vibrate([80, 60, 80]); } catch (e) {} }
-}
+$('cart').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const i = +(b.dataset.m ?? b.dataset.p ?? b.dataset.d), c = CART[i]; if (!c) return;
+  if (b.dataset.p !== undefined) c.qty = Math.min(999, c.qty + 1);
+  if (b.dataset.m !== undefined) { if (c.qty > 1) c.qty--; else CART.splice(i, 1); }
+  if (b.dataset.d !== undefined) CART.splice(i, 1);
+  saveC(); renderC();
+});
+$('clearBtn').onclick = () => {
+  const b = $('clearBtn'); if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = 'もう一度押すと全部消します'; setTimeout(() => { b.classList.remove('armed'); b.textContent = 'ぜんぶ消す'; }, 3000); return; }
+  CART = []; saveC(); renderC(); b.classList.remove('armed'); b.textContent = 'ぜんぶ消す';
+};
+
+/* ---------- 送信 ---------- */
+let sending = false;
+$('sendBtn').onclick = async () => {
+  // まだ確認できていない商品があれば先に確認
+  const look = CART.filter(c => c.st === 'look');
+  if (look.length) { $('sendBtn').disabled = true; $('sendBtn').textContent = '商品を確認中…'; await Promise.all(look.map(lookup)); }
+  if (CART.some(c => c.st === 'look')) { toast('電波が弱く、商品を確認できません。電波のよい所でもう一度押してください', true); renderC(); return; }
+  const ok = CART.filter(c => c.st === 'ok'); if (!ok.length) { renderC(); return; }
+  const none = CART.filter(c => c.st === 'none').length;
+  $('dlgText').innerHTML = `<b>${ok.length}商品・${cartN()}個</b>をSquareの在庫から減らします。${none ? `<br><span class="warn">未登録のJAN ${none}件は送りません。</span>` : ''}`;
+  $('dlgList').innerHTML = ok.map(c => `<div class="item" style="padding:6px 0"><div style="min-width:0;font-size:14px">${esc(c.name)}</div><span class="q" style="font-size:16px">−${c.qty}</span></div>`).join('');
+  $('dlg').classList.remove('hidden'); $('dlgGo').focus();
+};
+$('dlgNo').onclick = () => $('dlg').classList.add('hidden');
+$('dlgGo').onclick = async () => {
+  const ok = CART.filter(c => c.st === 'ok'); if (!ok.length) return;
+  const batchId = ls.get('ship_batch') || uid(); ls.set('ship_batch', batchId);   // 電波が切れて送り直しても二重に減らないよう、同じ番号で送る
+  sending = true; $('dlgGo').disabled = true; $('dlgGo').textContent = '送信中…';
+  try {
+    const d = await api('shipSend', { k: KEY, batchId, user: $('user').value.trim(), items: ok.map(c => ({ code: c.code, qty: c.qty })) }, true);
+    const at = Date.now();
+    d.results.filter(r => r.found).forEach(r => H.unshift({ id: r.id, code: r.code, name: r.name, qty: r.qty, before: r.before, after: r.after, at }));
+    const sent = new Set(ok.map(c => c.code));
+    CART = CART.filter(c => !sent.has(c.code));
+    ls.set('ship_batch', ''); saveC(); saveH();
+    $('dlg').classList.add('hidden');
+    const miss = d.results.filter(r => !r.found).length;
+    toast(`送信しました。${d.results.filter(r => r.found).length}商品の在庫を減らしました${miss ? `（未登録 ${miss}件は送っていません）` : ''}`);
+    if (d.results.some(r => Number(r.after) < 0)) setTimeout(() => toast('在庫がマイナスになった商品があります。送信済みの一覧を確認してください', true), 2400);
+  } catch (e) {
+    toast(e instanceof NetError ? '電波が弱くて送信できませんでした。カゴはそのままです。電波のよい所でもう一度「Squareに送信」を押してください' : e.message, true);
+  } finally { sending = false; $('dlgGo').disabled = false; $('dlgGo').textContent = '送信する（在庫を減らす）'; renderC(); renderH(); }
+};
 $('hist').addEventListener('click', async e => {
-  const u = e.target.closest('[data-undo]'), t = e.target.closest('[data-retry]');
-  if (t) { const r = H.find(x => x.id === t.dataset.retry); if (r) { r.st = 'wait'; r.msg = ''; saveH(); renderH(); pump(); } return; }
-  if (!u) return;
+  const u = e.target.closest('[data-undo]'); if (!u) return;
   if (!u.classList.contains('armed')) { u.classList.add('armed'); u.textContent = '取消する'; setTimeout(() => { u.classList.remove('armed'); u.textContent = '取消'; }, 3000); return; }
   u.disabled = true;
   const r = H.find(x => x.id === u.dataset.undo);
@@ -216,11 +275,6 @@ $('hist').addEventListener('click', async e => {
 });
 $('codeGo').onclick = () => { const c = $('code').value; if (!norm(c)) return; shipCode(c); $('code').value = ''; $('code').focus(); };
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('codeGo').click(); } });
-const setQty = v => { $('qty').value = Math.max(1, Math.min(999, v)); ls.set('ship_qty', $('qty').value); camQty(); };
-$('qm').onclick = () => setQty((parseInt($('qty').value, 10) || 1) - 1);
-$('qp').onclick = () => setQty((parseInt($('qty').value, 10) || 1) + 1);
-$('qty').onchange = () => setQty(parseInt($('qty').value, 10) || 1);
-function camQty() { const q = parseInt($('qty').value, 10) || 1; $('camQty').textContent = q > 1 ? `1回で ${q}個 減らします` : ''; }
 $('user').value = ls.get('ship_user'); $('user').onchange = () => ls.set('ship_user', $('user').value.trim());
 
 /* ---------- カメラ（かざすだけで読み取り） ----------
@@ -448,12 +502,12 @@ $('camfile').addEventListener('change', async e => {
 /* ---------- はじめ ---------- */
 (async () => {
   if (!KEY) { $('sKey').classList.remove('hidden'); return; }
-  $('sMain').classList.remove('hidden'); renderH(); camQty();
-  try { await api('shipInit', { k: KEY }); }
-  catch (e) { if (e instanceof NetError) note('いま通信できません。読んだ分は送信待ちにして、つながったら送ります'); else { note(e.message); $('camBtn').disabled = true; } }
-  if (H.some(x => x.st === 'wait')) pump();
+  $('sMain').classList.remove('hidden'); renderC(); renderH();
+  try { await api('shipInit', { k: KEY }); CART.filter(c => c.st === 'look').forEach(lookup); }
+  catch (e) { if (e instanceof NetError) note('いま通信できません。読んだ分はスマホにためておき、送信のときに送ります'); else { note(e.message); $('camBtn').disabled = true; } }
 })();
-window.addEventListener('online', pump);
+window.addEventListener('online', () => CART.filter(c => c.st === 'look').forEach(lookup));
+
 }
 </script>
 </body>
